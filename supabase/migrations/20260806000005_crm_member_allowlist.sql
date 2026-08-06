@@ -32,7 +32,11 @@ grant execute on function public.is_crm_member() to authenticated;
 -- Seed the first member. Without this nobody can get in, and nobody could add
 -- themselves either.
 insert into public.crm_members (email, note)
-values ('marc@marcserafin.com', 'Owner')
+values
+  ('marc@marcserafin.com',               'Owner'),
+  ('marc@interlinked.dev',               'Owner'),
+  ('marc.serafin.photography@gmail.com', 'Owner'),
+  ('marcserafin.info@gmail.com',         'Owner')
 on conflict (email) do nothing;
 
 create policy "members manage members" on public.crm_members
