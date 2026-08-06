@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "description": "Inflate AI — internal CRM for contacts, companies, lead pipeline and analytics",
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
