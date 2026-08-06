@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+build/
+# .env is committed on purpose: it holds only the public Supabase URL and
+# publishable key. Secrets belong in .env.local (never committed).
+.env*.local
+*.tsbuildinfo
+next-env.d.ts
+
+.DS_Store

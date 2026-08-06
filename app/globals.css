@@ -1,0 +1,179 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: #0b0c10;
+  --color-surface: #121419;
+  --color-surface-2: #171a21;
+  --color-surface-3: #1d212a;
+  --color-line: #262b36;
+  --color-line-soft: #1e222b;
+
+  --color-ink: #e8eaf0;
+  --color-ink-muted: #9aa1b2;
+  --color-ink-faint: #6b7285;
+
+  --color-brand: #7c6cff;
+  --color-brand-soft: #a89dff;
+  --color-accent: #22d3ee;
+
+  --color-positive: #34d399;
+  --color-warning: #fbbf24;
+  --color-negative: #fb7185;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-brand) 40%, transparent);
+  }
+
+  /* Consistent form controls across the app. */
+  input,
+  select,
+  textarea {
+    background-color: var(--color-surface-2);
+    border: 1px solid var(--color-line);
+    border-radius: 0.5rem;
+    color: var(--color-ink);
+    font-size: 0.875rem;
+    padding: 0.5rem 0.7rem;
+    width: 100%;
+    outline: none;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-ink-faint);
+  }
+
+  input:focus,
+  select:focus,
+  textarea:focus {
+    border-color: color-mix(in srgb, var(--color-brand) 70%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand) 18%, transparent);
+  }
+
+  select option {
+    background-color: var(--color-surface-2);
+  }
+
+  label {
+    color: var(--color-ink-muted);
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    margin-bottom: 0.35rem;
+  }
+
+  ::-webkit-scrollbar {
+    height: 10px;
+    width: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #333a48;
+  }
+}
+
+@layer components {
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-line-soft);
+    border-radius: 0.875rem;
+  }
+
+  .btn {
+    align-items: center;
+    border-radius: 0.5rem;
+    display: inline-flex;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    gap: 0.4rem;
+    justify-content: center;
+    padding: 0.5rem 0.85rem;
+    transition: background-color 120ms ease, border-color 120ms ease,
+      opacity 120ms ease;
+    white-space: nowrap;
+  }
+
+  .btn-primary {
+    background-color: var(--color-brand);
+    color: #fff;
+  }
+  .btn-primary:hover {
+    background-color: color-mix(in srgb, var(--color-brand) 85%, #fff);
+  }
+
+  .btn-ghost {
+    background-color: var(--color-surface-2);
+    border: 1px solid var(--color-line);
+    color: var(--color-ink);
+  }
+  .btn-ghost:hover {
+    background-color: var(--color-surface-3);
+  }
+
+  .btn-danger {
+    background-color: color-mix(in srgb, var(--color-negative) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-negative) 35%, transparent);
+    color: var(--color-negative);
+  }
+  .btn-danger:hover {
+    background-color: color-mix(in srgb, var(--color-negative) 22%, transparent);
+  }
+
+  .btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .chip {
+    align-items: center;
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    gap: 0.3rem;
+    letter-spacing: 0.02em;
+    padding: 0.15rem 0.55rem;
+  }
+
+  .label-caps {
+    color: var(--color-ink-faint);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+}
+
+/* Card being dragged across the pipeline board. */
+.dragging {
+  opacity: 0.4;
+}
+
+.drop-target {
+  background-color: color-mix(in srgb, var(--color-brand) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-brand) 45%, transparent) !important;
+}
