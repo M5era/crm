@@ -137,20 +137,34 @@ function monthKey(iso: string) {
  * leads, not millions) one round trip per table is cheaper than six RPCs, and
  * it keeps the funnel maths in one readable place.
  */
-export async function getAnalytics(monthsBack = 12): Promise<Analytics> {
+export async function getAnalytics(
+  workspaceId: string,
+  monthsBack = 12,
+): Promise<Analytics> {
   const supabase = await createClient();
 
-  const [stagesRes, leadsRes, eventsRes, activitiesRes, contactsRes, companiesRes] =
+  // stage_events has no workspace column of its own — it is reached through
+  // leads, so it is filtered by the lead ids below instead.
+  const [stagesRes, leadsRes, activitiesRes, contactsRes, companiesRes] =
     await Promise.all([
-      supabase.from("stages").select("*").order("position"),
-      supabase.from("leads").select("*"),
-      supabase.from("stage_events").select("*").order("created_at"),
-      supabase.from("activities").select("*"),
-      supabase.from("contacts").select("*", { count: "exact", head: true }),
-      supabase.from("companies").select("*", { count: "exact", head: true }),
+      supabase
+        .from("stages")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .order("position"),
+      supabase.from("leads").select("*").eq("workspace_id", workspaceId),
+      supabase.from("activities").select("*").eq("workspace_id", workspaceId),
+      supabase
+        .from("contacts")
+        .select("*", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId),
+      supabase
+        .from("companies")
+        .select("*", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId),
     ]);
 
-  for (const res of [stagesRes, leadsRes, eventsRes, activitiesRes]) {
+  for (const res of [stagesRes, leadsRes, activitiesRes]) {
     if (res.error) throw res.error;
   }
 
@@ -159,8 +173,19 @@ export async function getAnalytics(monthsBack = 12): Promise<Analytics> {
     ...l,
     value: Number(l.value ?? 0),
   }));
-  const events = (eventsRes.data ?? []) as StageEvent[];
   const activities = (activitiesRes.data ?? []) as Activity[];
+
+  const leadIds = leads.map((l) => l.id);
+  let events: StageEvent[] = [];
+  if (leadIds.length > 0) {
+    const eventsRes = await supabase
+      .from("stage_events")
+      .select("*")
+      .in("lead_id", leadIds)
+      .order("created_at");
+    if (eventsRes.error) throw eventsRes.error;
+    events = (eventsRes.data ?? []) as StageEvent[];
+  }
 
   const openLeads = leads.filter((l) => l.status === "open");
   const wonLeads = leads.filter((l) => l.status === "won");
@@ -327,6 +352,7 @@ export async function getAnalytics(monthsBack = 12): Promise<Analytics> {
     const { data: companyRows } = await supabase
       .from("companies")
       .select("id, name")
+      .eq("workspace_id", workspaceId)
       .in("id", companyIds);
 
     topCompanies = (companyRows ?? [])

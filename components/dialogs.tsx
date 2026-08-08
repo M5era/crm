@@ -22,6 +22,7 @@ import type { Company, Contact, Lead, Stage } from "@/lib/types";
 // --------------------------------------------------------------------- lead
 
 export function NewLeadDialog({
+  workspaceId,
   stages,
   companies,
   contacts,
@@ -31,6 +32,7 @@ export function NewLeadDialog({
   label = "New lead",
   triggerClassName = "btn btn-primary",
 }: {
+  workspaceId: string;
   stages: Stage[];
   companies: CompanyOption[];
   contacts: ContactOption[];
@@ -55,6 +57,7 @@ export function NewLeadDialog({
         </>
       }
     >
+      <input type="hidden" name="workspace_id" value={workspaceId} />
       <LeadFields
         stages={stages}
         companies={companies}
@@ -100,11 +103,13 @@ export function EditLeadDialog({
 // ------------------------------------------------------------------ contact
 
 export function NewContactDialog({
+  workspaceId,
   companies,
   defaultCompanyId,
   label = "New contact",
   triggerClassName = "btn btn-primary",
 }: {
+  workspaceId: string;
   companies: CompanyOption[];
   defaultCompanyId?: string;
   label?: string;
@@ -125,6 +130,7 @@ export function NewContactDialog({
         </>
       }
     >
+      <input type="hidden" name="workspace_id" value={workspaceId} />
       <ContactFields
         companies={companies}
         defaultCompanyId={defaultCompanyId}
@@ -157,9 +163,11 @@ export function EditContactDialog({
 // ------------------------------------------------------------------ company
 
 export function NewCompanyDialog({
+  workspaceId,
   label = "New company",
   triggerClassName = "btn btn-primary",
 }: {
+  workspaceId: string;
   label?: string;
   triggerClassName?: string;
 }) {
@@ -178,6 +186,7 @@ export function NewCompanyDialog({
         </>
       }
     >
+      <input type="hidden" name="workspace_id" value={workspaceId} />
       <CompanyFields />
     </FormDialog>
   );
@@ -201,10 +210,12 @@ export function EditCompanyDialog({ company }: { company: Company }) {
 // ----------------------------------------------------------------- activity
 
 export function NewActivityDialog({
+  workspaceId,
   leadId,
   contactId,
   companyId,
 }: {
+  workspaceId: string;
   leadId?: string;
   contactId?: string;
   companyId?: string;
@@ -223,6 +234,7 @@ export function NewActivityDialog({
         </>
       }
     >
+      <input type="hidden" name="workspace_id" value={workspaceId} />
       <ActivityFields
         leadId={leadId}
         contactId={contactId}

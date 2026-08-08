@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getAnalytics } from "@/lib/analytics";
+import { requireWorkspace } from "@/lib/workspace";
 import { HBarChart, type HBarRow } from "@/components/charts/h-bar-chart";
 import { MonthlyChart } from "@/components/charts/monthly-chart";
 import { RevenueChart } from "@/components/charts/revenue-chart";
@@ -12,8 +13,15 @@ import { ACTIVITY_LABELS, type ActivityType } from "@/lib/types";
 export const metadata = { title: "Analytics" };
 export const dynamic = "force-dynamic";
 
-export default async function AnalyticsPage() {
-  const a = await getAnalytics();
+export default async function AnalyticsPage({
+  params,
+}: {
+  params: Promise<{ workspace: string }>;
+}) {
+  const { workspace: slug } = await params;
+  const workspace = await requireWorkspace(slug);
+
+  const a = await getAnalytics(workspace.id);
   const hasLeads = a.totals.leads > 0;
 
   const funnelRows: HBarRow[] = a.funnel.map((step) => ({
@@ -48,7 +56,7 @@ export default async function AnalyticsPage() {
     <>
       <PageHeader
         title="Analytics"
-        subtitle="How the business is performing, end to end."
+        subtitle={`How ${workspace.name} is performing, end to end.`}
       />
 
       <div className="space-y-5 px-5 py-6 sm:px-8">
@@ -57,7 +65,10 @@ export default async function AnalyticsPage() {
             <span className="font-medium text-ink">No data yet.</span> Every
             number below fills in automatically as you add leads and move them
             through the{" "}
-            <Link href="/pipeline" className="text-brand-soft hover:underline">
+            <Link
+              href={`/${workspace.slug}/pipeline`}
+              className="text-brand-soft hover:underline"
+            >
               pipeline
             </Link>
             .
@@ -217,7 +228,7 @@ export default async function AnalyticsPage() {
                     <tr key={company.id}>
                       <td className="px-4 py-2.5">
                         <Link
-                          href={`/companies/${company.id}`}
+                          href={`/${workspace.slug}/companies/${company.id}`}
                           className="font-medium text-ink hover:text-brand-soft"
                         >
                           {company.name}

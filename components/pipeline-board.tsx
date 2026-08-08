@@ -15,7 +15,13 @@ export type Column = {
   value: number;
 };
 
-export function PipelineBoard({ columns }: { columns: Column[] }) {
+export function PipelineBoard({
+  columns,
+  workspaceSlug,
+}: {
+  columns: Column[];
+  workspaceSlug: string;
+}) {
   const router = useRouter();
   const [board, setBoard] = useState(columns);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -127,6 +133,7 @@ export function PipelineBoard({ columns }: { columns: Column[] }) {
                   <LeadCard
                     key={lead.id}
                     lead={lead}
+                    workspaceSlug={workspaceSlug}
                     stages={board.map((c) => c.stage)}
                     dragging={dragging === lead.id}
                     onDragStart={(e) => {
@@ -152,6 +159,7 @@ export function PipelineBoard({ columns }: { columns: Column[] }) {
 
 function LeadCard({
   lead,
+  workspaceSlug,
   stages,
   dragging,
   onDragStart,
@@ -159,6 +167,7 @@ function LeadCard({
   onMove,
 }: {
   lead: LeadWithRelations;
+  workspaceSlug: string;
   stages: Stage[];
   dragging: boolean;
   onDragStart: (e: React.DragEvent) => void;
@@ -178,7 +187,7 @@ function LeadCard({
     >
       <div className="flex items-start justify-between gap-2">
         <Link
-          href={`/leads/${lead.id}`}
+          href={`/${workspaceSlug}/leads/${lead.id}`}
           className="min-w-0 flex-1 text-sm font-medium leading-snug text-ink hover:text-brand-soft"
         >
           {lead.title}
@@ -213,7 +222,7 @@ function LeadCard({
 
       {lead.company && (
         <Link
-          href={`/companies/${lead.company.id}`}
+          href={`/${workspaceSlug}/companies/${lead.company.id}`}
           className="mt-1 block truncate text-xs text-ink-muted hover:text-brand-soft"
         >
           {lead.company.name}
@@ -233,7 +242,7 @@ function LeadCard({
         <div className="mt-2 flex items-center justify-between gap-2 border-t border-line-soft pt-2 text-[11px] text-ink-faint">
           {contact ? (
             <Link
-              href={`/contacts/${lead.contact!.id}`}
+              href={`/${workspaceSlug}/contacts/${lead.contact!.id}`}
               className="truncate hover:text-brand-soft"
             >
               {contact}

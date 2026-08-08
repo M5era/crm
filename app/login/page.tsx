@@ -22,7 +22,7 @@ export default function LoginPage() {
           <Logo size={44} />
           <div>
             <h1 className="text-xl font-semibold tracking-tight">
-              Inflate AI CRM
+              Interlinked CRM
             </h1>
             <p className="mt-1 text-sm text-ink-muted">
               Sign in to your workspace
@@ -37,7 +37,7 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-ink-faint">
-          Internal tool · access limited to Inflate AI staff
+          Internal tool · access by invitation only
         </p>
       </div>
     </main>

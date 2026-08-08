@@ -1,11 +1,36 @@
-# Inflate AI CRM
+# Interlinked CRM
 
-An internal CRM for Inflate AI: contacts, company profiles, a five-stage lead
-pipeline and a business-wide analytics tab.
+An internal CRM running two separate businesses side by side: contacts, company
+profiles, a lead pipeline and an analytics tab — one independent set per
+business.
 
 Built with Next.js (App Router) and Supabase Postgres, deployed on Vercel.
 
+## Workspaces
+
+A **workspace** is a business. Today there are two:
+
+| Workspace | URL | What it is |
+|---|---|---|
+| Inflate AI | `/inflate-ai` | AI automation agency |
+| Photography | `/photography` | Photography business |
+
+They share exactly one thing: the login. Contacts, companies, deals, stages,
+activities and every analytics number belong to one workspace and are invisible
+from the other — there is deliberately no combined view. Switching is a
+dropdown at the top of the sidebar, not a sign-out.
+
+Every URL carries its workspace (`/photography/pipeline`), so links are
+shareable and unambiguous, and every query in `lib/queries.ts` takes a
+`workspaceId` as its first required argument — a query that forgets to filter
+would leak one business into the other, so the parameter is not optional.
+
+Adding a third business is one row in `workspaces` plus its stages; no code
+changes.
+
 ## What is in it
+
+All five tabs below exist independently inside each workspace.
 
 | Tab | What it does |
 |---|---|
@@ -18,15 +43,29 @@ Built with Next.js (App Router) and Supabase Postgres, deployed on Vercel.
 Every lead, contact and company page can log activity (note, call, email,
 meeting, task), and it all rolls up into the analytics.
 
-## The pipeline
+## The pipelines
 
-Five stages, seeded by migration — no sample data:
+Each workspace has its own stages, because shoot work and agency work do not
+move through the same steps. Seeded by migration — no sample data.
+
+**Inflate AI**
 
 1. **New Lead** — captured but not yet worked
 2. **Contacted** — outreach sent, conversation opened
 3. **Qualified** — need, budget and timing confirmed
 4. **Proposal Sent** — scope and pricing delivered
 5. **Closed Won** — signed client, counts toward booked revenue
+
+**Photography**
+
+1. **Enquiry** — new request in, not yet replied to
+2. **Quote Sent** — packages and pricing shared
+3. **Date Held** — date pencilled in, awaiting deposit
+4. **Booked** — deposit paid, date confirmed
+5. **Delivered** — gallery delivered and balance paid
+
+The last stage of each is the winning one, so photography revenue counts when
+the balance is settled rather than when a date is pencilled in.
 
 Losing a deal is a separate decision from its stage: **Mark lost** on a lead
 settles it without moving the card, so a deal that died at Proposal still
@@ -45,13 +84,15 @@ Two database triggers keep this honest:
 
 ```
 app/
-  (app)/            authenticated shell — dashboard, pipeline, leads,
-                    contacts, companies, analytics
+  (app)/            authentication gate
+    [workspace]/    the workspace shell and every scoped page —
+                    dashboard, pipeline, leads, contacts, companies, analytics
   login/            sign in / sign up
   actions.ts        all writes (server actions)
 lib/
   supabase/         browser, server and middleware clients
-  queries.ts        server-side reads
+  workspace.ts      resolves the workspace in the URL
+  queries.ts        server-side reads, all workspace-scoped
   analytics.ts      every metric on the analytics tab
   viz.ts            validated chart palette
   format.ts         money, dates, relative time
@@ -84,9 +125,9 @@ insert into public.crm_members (email, note)
 values ('teammate@example.com', 'Sales');
 ```
 
-Then invite the address from **Supabase → Authentication → Users → Invite user**.
-An invite confirms the address directly, which avoids the signup confirmation
-email entirely.
+Then create the account from **Supabase → Authentication → Users → "Add user" →
+"Create new user"**, with **Auto Confirm User** enabled. That confirms the
+address directly and avoids the rate-limited confirmation email entirely.
 
 **Recommended**: turn off public signup in
 **Supabase → Authentication → Sign In / Providers → Email → "Allow new users to
@@ -122,6 +163,12 @@ npm run typecheck  # tsc --noEmit
 
 ## Database migrations
 
-`supabase/migrations/` is the source of truth, applied in filename order. They
-are already applied to the live project; re-apply them in order when setting up
-a new Supabase project.
+`supabase/migrations/` is the source of truth, applied in filename order. Paste
+a migration into the Supabase SQL editor to apply it, or run them all in order
+when setting up a new project.
+
+The workspaces migration (`20260807000001_workspaces.sql`) adds the
+`workspaces` table and a `workspace_id` to every other table, backfills existing
+rows to Inflate AI, and seeds the photography stages. **It must be applied
+before this version of the app is deployed** — until then the app cannot read
+`workspaces` and shows the no-access screen.

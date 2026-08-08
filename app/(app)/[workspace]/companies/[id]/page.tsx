@@ -10,6 +10,7 @@ import {
   getLeads,
   getStages,
 } from "@/lib/queries";
+import { requireWorkspace } from "@/lib/workspace";
 import { ActivityTimeline } from "@/components/activity-timeline";
 import {
   EditCompanyDialog,
@@ -34,30 +35,32 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ workspace: string; id: string }>;
 }) {
-  const { id } = await params;
-  const company = await getCompany(id);
+  const { workspace: slug, id } = await params;
+  const workspace = await requireWorkspace(slug);
+  const company = await getCompany(workspace.id, id);
   return { title: company?.name ?? "Company" };
 }
 
 export default async function CompanyPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ workspace: string; id: string }>;
 }) {
-  const { id } = await params;
-  const company = await getCompany(id);
+  const { workspace: slug, id } = await params;
+  const workspace = await requireWorkspace(slug);
+  const company = await getCompany(workspace.id, id);
   if (!company) notFound();
 
   const [leads, contacts, activities, companies, contactOptions, stages] =
     await Promise.all([
-      getLeads({ companyId: id }),
-      getCompanyContacts(id),
-      getActivities({ companyId: id }),
-      getCompanyOptions(),
-      getContactOptions(),
-      getStages(),
+      getLeads(workspace.id, { companyId: id }),
+      getCompanyContacts(workspace.id, id),
+      getActivities(workspace.id, { companyId: id }),
+      getCompanyOptions(workspace.id),
+      getContactOptions(workspace.id),
+      getStages(workspace.id),
     ]);
 
   const openValue = leads
@@ -86,10 +89,15 @@ export default async function CompanyPage({
         }
         actions={
           <>
-            <NewActivityDialog companyId={company.id} />
+            <NewActivityDialog workspaceId={workspace.id} companyId={company.id} />
             <EditCompanyDialog company={company} />
             <form action={deleteCompany}>
               <input type="hidden" name="id" value={company.id} />
+              <input
+                type="hidden"
+                name="workspace_slug"
+                value={workspace.slug}
+              />
               <button
                 type="submit"
                 className="btn btn-danger"
@@ -131,6 +139,7 @@ export default async function CompanyPage({
             title="Deals"
             actions={
               <NewLeadDialog
+                workspaceId={workspace.id}
                 stages={stages}
                 companies={companies}
                 contacts={contactOptions}
@@ -141,11 +150,13 @@ export default async function CompanyPage({
             }
           >
             <LeadList
+              workspaceSlug={workspace.slug}
               leads={leads}
               emptyTitle="No deals with this company"
               emptyDescription="Create a deal to start tracking it in the pipeline."
               action={
                 <NewLeadDialog
+                  workspaceId={workspace.id}
                   stages={stages}
                   companies={companies}
                   contacts={contactOptions}
@@ -160,6 +171,7 @@ export default async function CompanyPage({
             title="People"
             actions={
               <NewContactDialog
+                workspaceId={workspace.id}
                 companies={companies}
                 defaultCompanyId={company.id}
                 label="New contact"
@@ -174,6 +186,7 @@ export default async function CompanyPage({
                 description="Add the people you speak to at this company."
                 action={
                   <NewContactDialog
+                    workspaceId={workspace.id}
                     companies={companies}
                     defaultCompanyId={company.id}
                     label="New contact"
@@ -189,7 +202,7 @@ export default async function CompanyPage({
                   return (
                     <li key={contact.id}>
                       <Link
-                        href={`/contacts/${contact.id}`}
+                        href={`/${workspace.slug}/contacts/${contact.id}`}
                         className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2/60"
                       >
                         <Avatar name={name} size={34} />
@@ -211,7 +224,7 @@ export default async function CompanyPage({
 
           <Section
             title="Activity"
-            actions={<NewActivityDialog companyId={company.id} />}
+            actions={<NewActivityDialog workspaceId={workspace.id} companyId={company.id} />}
           >
             <ActivityTimeline activities={activities} />
           </Section>

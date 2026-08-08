@@ -9,6 +9,7 @@ import {
   getLeads,
   getStages,
 } from "@/lib/queries";
+import { requireWorkspace } from "@/lib/workspace";
 import { ActivityTimeline } from "@/components/activity-timeline";
 import {
   EditContactDialog,
@@ -25,10 +26,11 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ workspace: string; id: string }>;
 }) {
-  const { id } = await params;
-  const contact = await getContact(id);
+  const { workspace: slug, id } = await params;
+  const workspace = await requireWorkspace(slug);
+  const contact = await getContact(workspace.id, id);
   return {
     title: contact
       ? [contact.first_name, contact.last_name].filter(Boolean).join(" ")
@@ -39,18 +41,19 @@ export async function generateMetadata({
 export default async function ContactPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ workspace: string; id: string }>;
 }) {
-  const { id } = await params;
-  const contact = await getContact(id);
+  const { workspace: slug, id } = await params;
+  const workspace = await requireWorkspace(slug);
+  const contact = await getContact(workspace.id, id);
   if (!contact) notFound();
 
   const [leads, activities, companies, contacts, stages] = await Promise.all([
-    getLeads({ contactId: id }),
-    getActivities({ contactId: id }),
-    getCompanyOptions(),
-    getContactOptions(),
-    getStages(),
+    getLeads(workspace.id, { contactId: id }),
+    getActivities(workspace.id, { contactId: id }),
+    getCompanyOptions(workspace.id),
+    getContactOptions(workspace.id),
+    getStages(workspace.id),
   ]);
 
   const name = [contact.first_name, contact.last_name]
@@ -79,10 +82,15 @@ export default async function ContactPage({
         }
         actions={
           <>
-            <NewActivityDialog contactId={contact.id} />
+            <NewActivityDialog workspaceId={workspace.id} contactId={contact.id} />
             <EditContactDialog contact={contact} companies={companies} />
             <form action={deleteContact}>
               <input type="hidden" name="id" value={contact.id} />
+              <input
+                type="hidden"
+                name="workspace_slug"
+                value={workspace.slug}
+              />
               <button
                 type="submit"
                 className="btn btn-danger"
@@ -116,6 +124,7 @@ export default async function ContactPage({
             description="Every lead this person is attached to."
             actions={
               <NewLeadDialog
+                workspaceId={workspace.id}
                 stages={stages}
                 companies={companies}
                 contacts={contacts}
@@ -127,12 +136,14 @@ export default async function ContactPage({
             }
           >
             <LeadList
+              workspaceSlug={workspace.slug}
               leads={leads}
               showCompany
               emptyTitle="No deals for this contact"
               emptyDescription="Create a deal to start tracking them in the pipeline."
               action={
                 <NewLeadDialog
+                  workspaceId={workspace.id}
                   stages={stages}
                   companies={companies}
                   contacts={contacts}
@@ -154,7 +165,7 @@ export default async function ContactPage({
 
           <Section
             title="Activity"
-            actions={<NewActivityDialog contactId={contact.id} />}
+            actions={<NewActivityDialog workspaceId={workspace.id} contactId={contact.id} />}
           >
             <ActivityTimeline activities={activities} />
           </Section>
@@ -216,7 +227,7 @@ export default async function ContactPage({
               <DetailRow label="Company">
                 {contact.company ? (
                   <Link
-                    href={`/companies/${contact.company.id}`}
+                    href={`/${workspace.slug}/companies/${contact.company.id}`}
                     className="text-brand-soft hover:underline"
                   >
                     {contact.company.name}

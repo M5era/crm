@@ -35,6 +35,9 @@ export async function createLead(
   const title = text(form, "title");
   if (!title) return { error: "Give the lead a name." };
 
+  const workspaceId = text(form, "workspace_id");
+  if (!workspaceId) return { error: "Missing workspace." };
+
   const supabase = await createClient();
   let stageId = text(form, "stage_id");
 
@@ -42,6 +45,7 @@ export async function createLead(
     const { data } = await supabase
       .from("stages")
       .select("id")
+      .eq("workspace_id", workspaceId)
       .order("position")
       .limit(1)
       .maybeSingle();
@@ -50,6 +54,7 @@ export async function createLead(
   if (!stageId) return { error: "No pipeline stages are configured." };
 
   const { error } = await supabase.from("leads").insert({
+    workspace_id: workspaceId,
     title,
     stage_id: stageId,
     company_id: text(form, "company_id"),
@@ -120,10 +125,11 @@ export async function setLeadStatus(leadId: string, status: LeadStatus) {
 export async function deleteLead(form: FormData) {
   const id = form.get("id");
   if (typeof id !== "string") return;
+  const slug = form.get("workspace_slug");
   const supabase = await createClient();
   await supabase.from("leads").delete().eq("id", id);
   revalidateEverything();
-  redirect("/pipeline");
+  redirect(typeof slug === "string" ? `/${slug}/pipeline` : "/");
 }
 
 // ---------------------------------------------------------------- contacts
@@ -135,8 +141,12 @@ export async function createContact(
   const firstName = text(form, "first_name");
   if (!firstName) return { error: "A first name is required." };
 
+  const workspaceId = text(form, "workspace_id");
+  if (!workspaceId) return { error: "Missing workspace." };
+
   const supabase = await createClient();
   const { error } = await supabase.from("contacts").insert({
+    workspace_id: workspaceId,
     first_name: firstName,
     last_name: text(form, "last_name"),
     email: text(form, "email"),
@@ -186,10 +196,11 @@ export async function updateContact(
 export async function deleteContact(form: FormData) {
   const id = form.get("id");
   if (typeof id !== "string") return;
+  const slug = form.get("workspace_slug");
   const supabase = await createClient();
   await supabase.from("contacts").delete().eq("id", id);
   revalidateEverything();
-  redirect("/contacts");
+  redirect(typeof slug === "string" ? `/${slug}/contacts` : "/");
 }
 
 // --------------------------------------------------------------- companies
@@ -201,8 +212,12 @@ export async function createCompany(
   const name = text(form, "name");
   if (!name) return { error: "A company name is required." };
 
+  const workspaceId = text(form, "workspace_id");
+  if (!workspaceId) return { error: "Missing workspace." };
+
   const supabase = await createClient();
   const { error } = await supabase.from("companies").insert({
+    workspace_id: workspaceId,
     name,
     domain: text(form, "domain"),
     website: text(form, "website"),
@@ -248,10 +263,11 @@ export async function updateCompany(
 export async function deleteCompany(form: FormData) {
   const id = form.get("id");
   if (typeof id !== "string") return;
+  const slug = form.get("workspace_slug");
   const supabase = await createClient();
   await supabase.from("companies").delete().eq("id", id);
   revalidateEverything();
-  redirect("/companies");
+  redirect(typeof slug === "string" ? `/${slug}/companies` : "/");
 }
 
 // -------------------------------------------------------------- activities
@@ -268,7 +284,11 @@ export async function createActivity(
     data: { user },
   } = await supabase.auth.getUser();
 
+  const workspaceId = text(form, "workspace_id");
+  if (!workspaceId) return { error: "Missing workspace." };
+
   const { error } = await supabase.from("activities").insert({
+    workspace_id: workspaceId,
     type: (text(form, "type") ?? "note") as ActivityType,
     subject,
     body: text(form, "body"),

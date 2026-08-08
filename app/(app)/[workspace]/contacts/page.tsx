@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getCompanyOptions, getContacts } from "@/lib/queries";
+import { requireWorkspace } from "@/lib/workspace";
 import { NewContactDialog } from "@/components/dialogs";
 import { SearchInput } from "@/components/search-input";
 import { Avatar, EmptyState, PageHeader } from "@/components/ui";
@@ -10,14 +11,18 @@ export const metadata = { title: "Contacts" };
 export const dynamic = "force-dynamic";
 
 export default async function ContactsPage({
+  params,
   searchParams,
 }: {
+  params: Promise<{ workspace: string }>;
   searchParams: Promise<{ q?: string }>;
 }) {
-  const { q } = await searchParams;
+  const [{ workspace: slug }, { q }] = await Promise.all([params, searchParams]);
+  const workspace = await requireWorkspace(slug);
+
   const [contacts, companies] = await Promise.all([
-    getContacts(q),
-    getCompanyOptions(),
+    getContacts(workspace.id, q),
+    getCompanyOptions(workspace.id),
   ]);
 
   return (
@@ -29,13 +34,15 @@ export default async function ContactsPage({
             ? `${contacts.length} ${contacts.length === 1 ? "match" : "matches"} for “${q}”`
             : `${contacts.length} ${contacts.length === 1 ? "person" : "people"} in the CRM`
         }
-        actions={<NewContactDialog companies={companies} />}
+        actions={
+          <NewContactDialog workspaceId={workspace.id} companies={companies} />
+        }
       />
 
       <div className="px-5 py-5 sm:px-8">
         <div className="mb-4">
           <SearchInput
-            action="/contacts"
+            action={`/${workspace.slug}/contacts`}
             placeholder="Search name, email or title…"
             defaultValue={q}
           />
@@ -52,7 +59,12 @@ export default async function ContactsPage({
                   : "Add the people you are talking to — they can be linked to companies and deals."
               }
               action={
-                !q ? <NewContactDialog companies={companies} /> : undefined
+                !q ? (
+                  <NewContactDialog
+                    workspaceId={workspace.id}
+                    companies={companies}
+                  />
+                ) : undefined
               }
             />
           ) : (
@@ -89,7 +101,7 @@ export default async function ContactsPage({
                       >
                         <td className="px-4 py-3">
                           <Link
-                            href={`/contacts/${contact.id}`}
+                            href={`/${workspace.slug}/contacts/${contact.id}`}
                             className="flex items-center gap-3"
                           >
                             <Avatar name={name} size={34} />
@@ -106,7 +118,7 @@ export default async function ContactsPage({
                         <td className="px-4 py-3">
                           {contact.company ? (
                             <Link
-                              href={`/companies/${contact.company.id}`}
+                              href={`/${workspace.slug}/companies/${contact.company.id}`}
                               className="text-ink-muted hover:text-brand-soft"
                             >
                               {contact.company.name}

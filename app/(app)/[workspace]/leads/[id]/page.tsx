@@ -9,6 +9,7 @@ import {
   getLeadStageHistory,
   getStages,
 } from "@/lib/queries";
+import { requireWorkspace } from "@/lib/workspace";
 import { ActivityTimeline } from "@/components/activity-timeline";
 import { EditLeadDialog, NewActivityDialog } from "@/components/dialogs";
 import { LeadStageControl } from "@/components/lead-stage-control";
@@ -33,28 +34,30 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ workspace: string; id: string }>;
 }) {
-  const { id } = await params;
-  const lead = await getLead(id);
+  const { workspace: slug, id } = await params;
+  const workspace = await requireWorkspace(slug);
+  const lead = await getLead(workspace.id, id);
   return { title: lead?.title ?? "Lead" };
 }
 
 export default async function LeadPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ workspace: string; id: string }>;
 }) {
-  const { id } = await params;
-  const lead = await getLead(id);
+  const { workspace: slug, id } = await params;
+  const workspace = await requireWorkspace(slug);
+  const lead = await getLead(workspace.id, id);
   if (!lead) notFound();
 
   const [stages, activities, history, companies, contacts] = await Promise.all([
-    getStages(),
-    getActivities({ leadId: id }),
+    getStages(workspace.id),
+    getActivities(workspace.id, { leadId: id }),
     getLeadStageHistory(id),
-    getCompanyOptions(),
-    getContactOptions(),
+    getCompanyOptions(workspace.id),
+    getContactOptions(workspace.id),
   ]);
 
   const contactName = fullName(lead.contact);
@@ -70,7 +73,7 @@ export default async function LeadPage({
         }
         actions={
           <>
-            <NewActivityDialog leadId={lead.id} />
+            <NewActivityDialog workspaceId={workspace.id} leadId={lead.id} />
             <EditLeadDialog
               lead={lead}
               stages={stages}
@@ -79,6 +82,11 @@ export default async function LeadPage({
             />
             <form action={deleteLead}>
               <input type="hidden" name="id" value={lead.id} />
+              <input
+                type="hidden"
+                name="workspace_slug"
+                value={workspace.slug}
+              />
               <button
                 type="submit"
                 className="btn btn-danger"
@@ -111,7 +119,7 @@ export default async function LeadPage({
           <Section
             title="Activity"
             description="Everything logged against this deal."
-            actions={<NewActivityDialog leadId={lead.id} />}
+            actions={<NewActivityDialog workspaceId={workspace.id} leadId={lead.id} />}
           >
             <ActivityTimeline activities={activities} />
           </Section>
@@ -153,7 +161,7 @@ export default async function LeadPage({
               <DetailRow label="Company">
                 {lead.company ? (
                   <Link
-                    href={`/companies/${lead.company.id}`}
+                    href={`/${workspace.slug}/companies/${lead.company.id}`}
                     className="text-brand-soft hover:underline"
                   >
                     {lead.company.name}
@@ -165,7 +173,7 @@ export default async function LeadPage({
               <DetailRow label="Contact">
                 {lead.contact ? (
                   <Link
-                    href={`/contacts/${lead.contact.id}`}
+                    href={`/${workspace.slug}/contacts/${lead.contact.id}`}
                     className="text-brand-soft hover:underline"
                   >
                     {contactName}

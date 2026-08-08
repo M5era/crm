@@ -1,8 +1,23 @@
 export type LeadStatus = "open" | "won" | "lost";
 export type ActivityType = "note" | "call" | "email" | "meeting" | "task";
 
+/**
+ * A separate business. Every record below belongs to exactly one workspace and
+ * is invisible from the others — there is no cross-workspace view by design.
+ */
+export type Workspace = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  accent: string;
+  position: number;
+  created_at: string;
+};
+
 export type Stage = {
   id: string;
+  workspace_id: string;
   key: string;
   name: string;
   description: string | null;
@@ -13,6 +28,7 @@ export type Stage = {
 
 export type Company = {
   id: string;
+  workspace_id: string;
   name: string;
   domain: string | null;
   website: string | null;
@@ -26,6 +42,7 @@ export type Company = {
 
 export type Contact = {
   id: string;
+  workspace_id: string;
   first_name: string;
   last_name: string | null;
   email: string | null;
@@ -41,6 +58,7 @@ export type Contact = {
 
 export type Lead = {
   id: string;
+  workspace_id: string;
   title: string;
   company_id: string | null;
   contact_id: string | null;
@@ -58,6 +76,7 @@ export type Lead = {
 
 export type Activity = {
   id: string;
+  workspace_id: string;
   type: ActivityType;
   subject: string;
   body: string | null;
