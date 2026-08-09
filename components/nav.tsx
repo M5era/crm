@@ -7,6 +7,7 @@ import {
   CompaniesIcon,
   ContactsIcon,
   DashboardIcon,
+  InboxIcon,
   PipelineIcon,
   SettingsIcon,
 } from "@/components/icons";
@@ -14,6 +15,7 @@ import {
 const ITEMS = [
   { path: "", label: "Dashboard", Icon: DashboardIcon, exact: true },
   { path: "/pipeline", label: "Pipeline", Icon: PipelineIcon },
+  { path: "/replies", label: "Replies", Icon: InboxIcon },
   { path: "/contacts", label: "Contacts", Icon: ContactsIcon },
   { path: "/companies", label: "Companies", Icon: CompaniesIcon },
   { path: "/analytics", label: "Analytics", Icon: AnalyticsIcon },

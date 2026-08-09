@@ -5,9 +5,11 @@ import {
   getActivities,
   getCompanyOptions,
   getContact,
+  getContactEmails,
   getLeads,
   getStages,
 } from "@/lib/queries";
+import { classificationMeta } from "@/lib/types";
 import { requireWorkspace } from "@/lib/workspace";
 import { ActivityTimeline } from "@/components/activity-timeline";
 import {
@@ -48,11 +50,12 @@ export default async function ContactPage({
   const contact = await getContact(workspace.id, id);
   if (!contact) notFound();
 
-  const [leads, activities, companies, stages] = await Promise.all([
+  const [leads, activities, companies, stages, emails] = await Promise.all([
     getLeads(workspace.id, { contactId: id }),
     getActivities(workspace.id, { contactId: id }),
     getCompanyOptions(workspace.id),
     getStages(workspace.id),
+    getContactEmails(workspace.id, id),
   ]);
 
   const name = [contact.first_name, contact.last_name]
@@ -154,6 +157,50 @@ export default async function ContactPage({
             </Section>
           )}
 
+          {emails.length > 0 && (
+            <Section
+              title="Email"
+              description="What we sent, and what came back."
+            >
+              <ul className="divide-y divide-line-soft">
+                {emails.map((email) => {
+                  const inbound = email.direction === "inbound";
+                  const meta = classificationMeta(email.classification);
+                  return (
+                    <li key={email.id} className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className="chip"
+                          style={
+                            inbound
+                              ? {
+                                  backgroundColor: `color-mix(in srgb, ${meta.color} 16%, transparent)`,
+                                  color: meta.color,
+                                }
+                              : undefined
+                          }
+                        >
+                          {inbound ? meta.singular : "Sent"}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm text-ink">
+                          {email.subject ?? "(no subject)"}
+                        </span>
+                        <span className="shrink-0 text-xs text-ink-faint">
+                          {formatDate(email.occurred_at)}
+                        </span>
+                      </div>
+                      {inbound && email.body && (
+                        <p className="mt-1 line-clamp-3 text-xs text-ink-faint">
+                          {email.body.slice(0, 400)}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </Section>
+          )}
+
           <Section
             title="Activity"
             actions={<NewActivityDialog workspaceId={workspace.id} contactId={contact.id} />}
@@ -247,6 +294,28 @@ export default async function ContactPage({
                   ? formatDate(contact.last_contacted_at)
                   : "Never"}
               </DetailRow>
+              <DetailRow label="Last reply">
+                {contact.last_reply_at
+                  ? formatDate(contact.last_reply_at)
+                  : "None"}
+              </DetailRow>
+              {/* Two facts that must survive whatever the lifecycle says: a
+                  dead address and an explicit opt-out are reasons never to
+                  mail this person again. */}
+              {contact.bounced_at && (
+                <DetailRow label="Bounced">
+                  <span className="text-negative">
+                    {formatDate(contact.bounced_at)}
+                  </span>
+                </DetailRow>
+              )}
+              {contact.unsubscribed_at && (
+                <DetailRow label="Opted out">
+                  <span className="text-warning">
+                    {formatDate(contact.unsubscribed_at)}
+                  </span>
+                </DetailRow>
+              )}
               <DetailRow label="Added">
                 {formatDate(contact.created_at)}
               </DetailRow>

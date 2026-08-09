@@ -30,12 +30,13 @@ changes.
 
 ## What is in it
 
-All five tabs below exist independently inside each workspace.
+All six tabs below exist independently inside each workspace.
 
 | Tab | What it does |
 |---|---|
 | **Dashboard** | Open pipeline value, closed revenue, 30-day lead flow, win rate, deals closing soon, recent activity |
 | **Pipeline** | Kanban board across the five stages. Drag cards between columns, or use the ⋯ menu on touch |
+| **Replies** | Every email received, sorted into replies, auto-replies, bounces and opt-outs, plus the unmatched queue |
 | **Contacts** | Searchable list of people, each with a profile: details, their deals, and an activity timeline |
 | **Companies** | Company cards and full profiles: people at the company, deals, totals, activity |
 | **Analytics** | Funnel conversion, time in stage, monthly lead flow, closed revenue, source performance, top accounts, per-owner leaderboard |
@@ -62,8 +63,103 @@ calls this "lead conversion" — which creates the deal and marks them qualified
 That is the only route onto the board, which is what keeps 900 silent
 prospects off it.
 
-Sending the outreach is not this app's job. That belongs to a sequencer, which
-should call `POST /api/v1/deals` on a reply.
+Sending the outreach is not this app's job — that belongs to a sequencer. But
+noticing that somebody *answered* is very much this app's job, and it is what
+moves a contact from `contacted` to `replied` without anybody watching an inbox.
+See **Reply detection** below.
+
+## Reply detection
+
+The mailbox is read by n8n over IMAP. Everything it finds is posted to this app,
+which decides what the message means and who it is from. The split is
+deliberate: **n8n owns transport, the CRM owns meaning.** Swapping IMAP for a
+provider webhook later changes one n8n node and nothing here.
+
+### Matching is a lookup, not a guess
+
+The hard part of reply detection is not reading mail, it is knowing that *this*
+message answers *that* outreach to *that* person. So the send path does half the
+work: after the sequencer sends, it posts the email's `Message-ID` to
+`POST /api/v1/outbound-email`. A reply carries that id back in `In-Reply-To` /
+`References`, which makes the match exact.
+
+Incoming mail is matched on a ladder, ordered by how much each rung can be
+trusted:
+
+1. **Threading headers** — `In-Reply-To` / `References` against the ids we
+   banked. Survives subject edits, forwards and a changed display name.
+2. **From address** — matched against contact email inside the workspace.
+   Nearly as good, but misses anyone answering from a second address.
+3. **Nothing.** There is deliberately no fuzzy third rung. Unmatched mail goes
+   to a queue on the **Replies** tab for a human to look at, which is strictly
+   better than a confident wrong answer.
+
+### Not every incoming email is a reply
+
+Classified before it is matched, because getting this backwards is what makes a
+funnel lie:
+
+| Verdict | Detected by | What it does |
+|---|---|---|
+| **Bounce** | DSN content-type, null `Return-Path`, `X-Failed-Recipients`, `MAILER-DAEMON`, subject | Stamps `bounced_at`; disqualifies only a contact who never got through |
+| **Auto-reply** | `Auto-Submitted`, `Precedence`, `X-Autoreply`, `List-Unsubscribe`, subject | Logged and shown, but **never** moves the lifecycle |
+| **Opt-out** | Opt-out phrasing near the start of the body | Stamps `unsubscribed_at`, marks unqualified |
+| **Reply** | None of the above | Moves `new`/`contacted` → `replied`, stamps `last_reply_at` |
+
+Subjects are matched in English and German, so `Abwesenheitsnotiz` is recognised
+as an out-of-office and `Unzustellbar` as a bounce.
+
+Every rule guards against moving somebody *backwards*. A qualified contact who
+replies again stays qualified; a customer whose mailbox bounces stays a
+customer. A bounce from a live conversation is usually a full mailbox, not a bad
+lead, so it only disqualifies someone still in the cold end of the funnel.
+
+The endpoint is safe to call twice — `message_id` is unique per workspace, and
+IMAP will redeliver whenever a poll is interrupted mid-batch. Messages with no
+`Message-ID` get a stable synthetic one derived from the envelope, so a real
+reply is never dropped on a technicality.
+
+### Setting up the iCloud side
+
+iCloud+ works fine for this. It has no push API, so n8n polls — a few minutes of
+latency, invisible for outreach.
+
+1. Turn on two-factor authentication for the Apple ID, then create an
+   **app-specific password** at [appleid.apple.com](https://appleid.apple.com) →
+   *Sign-In and Security* → *App-Specific Passwords*.
+2. Add an IMAP credential in n8n:
+
+   | Setting | Value |
+   |---|---|
+   | Host | `imap.mail.me.com` |
+   | Port | `993`, SSL/TLS |
+   | User | your **`@icloud.com`** address — *not* the custom-domain alias |
+   | Password | the app-specific password |
+
+   Custom-domain mail lands in the same mailbox, so one connection covers every
+   domain. Using the alias as the username is the usual reason a login fails.
+3. Import [`docs/n8n-inbound-email.json`](docs/n8n-inbound-email.json), then set
+   the credential, your CRM URL and an API key on the HTTP node.
+4. In the sequencer, add one HTTP node straight after the send:
+
+   ```
+   POST https://<crm>/api/v1/outbound-email
+   Authorization: Bearer crm_live_…
+
+   { "message_id": "<id returned by the send node>",
+     "contact_email": "jane@acme.com",
+     "subject": "…" }
+   ```
+
+   If the send node does not surface a `Message-ID`, set one yourself on the
+   outgoing mail and post that same value. Skipping this step still leaves
+   from-address matching working — you just lose thread-accurate attribution,
+   and `contact_matched: false` in the response tells you when that has
+   happened.
+
+Sending through iCloud is capped at 1,000 messages and 1,000 recipients a day.
+That is a personal-use mailbox, so it gives you no bounce feedback of its own —
+which is exactly why bounces are detected by reading the mail itself.
 
 ## The pipelines
 
@@ -113,8 +209,9 @@ Two database triggers keep this honest:
 ```
 app/
   (app)/            authentication gate
-    [workspace]/    the workspace shell and every scoped page —
-                    dashboard, pipeline, leads, contacts, companies, analytics
+    [workspace]/    the workspace shell and every scoped page — dashboard,
+                    pipeline, replies, leads, contacts, companies, analytics
+  api/v1/           machine access: import, deals, inbound/outbound email
   login/            sign in / sign up
   actions.ts        all writes (server actions)
 lib/
@@ -122,14 +219,18 @@ lib/
   workspace.ts      resolves the workspace in the URL
   queries.ts        server-side reads, all workspace-scoped
   analytics.ts      every metric on the analytics tab
+  inbound-email.ts  classify a received email, then match it to a contact
+  api-auth.ts       bearer-token auth for the API routes
   viz.ts            validated chart palette
   format.ts         money, dates, relative time
 components/         UI, dialogs, charts, pipeline board
+docs/               importable n8n workflow
 supabase/migrations/ database schema, in order
 ```
 
-Reads happen in Server Components; writes go through Server Actions in
-`app/actions.ts`. There is no API layer to keep in sync.
+Reads happen in Server Components and writes go through Server Actions in
+`app/actions.ts`, so the UI has no API layer to keep in sync. `app/api/v1/` is
+for machines only — imports and the email workflow — and authenticates itself.
 
 Analytics aggregates in TypeScript over four table reads rather than in SQL. At
 agency scale (thousands of leads, not millions) one round trip per table beats
@@ -153,14 +254,21 @@ Settings; it is shown once and stored only as a hash. Keys are scoped to a
 single workspace.
 
 ```
-POST /api/v1/contacts    { "contacts": [ ... ] }    up to 1000 per call
-POST /api/v1/companies   { "companies": [ ... ] }
-POST /api/v1/deals       { "title": "...", "contact_email": "..." }
+POST /api/v1/contacts        { "contacts": [ ... ] }    up to 1000 per call
+POST /api/v1/companies       { "companies": [ ... ] }
+POST /api/v1/deals           { "title": "...", "contact_email": "..." }
+POST /api/v1/outbound-email  { "message_id": "...", "contact_email": "..." }
+POST /api/v1/inbound-email   { "message_id": "...", "from_email": "...", ... }
 GET  /api/v1/contacts?lifecycle=replied&limit=100
 GET  /api/v1/deals?status=open
+GET  /api/v1/inbound-email?unmatched=true
 
 Authorization: Bearer crm_live_…
 ```
+
+The two email endpoints are the reply-detection pair — see **Reply detection**
+above. `GET /api/v1/inbound-email?unmatched=true` reads the queue back, which is
+worth a nightly "did we miss anyone" check in n8n.
 
 `POST /api/v1/deals` is the interesting one: pass `contact_email` and
 `company_name` and it matches or creates both, so a webhook never needs to know
@@ -240,6 +348,10 @@ npm run typecheck  # tsc --noEmit
 `supabase/migrations/` is the source of truth, applied in filename order. Paste
 a migration into the Supabase SQL editor to apply it, or run them all in order
 when setting up a new project.
+
+`20260809000001_email_reply_detection.sql` adds the `email_messages` table and
+the bounce/opt-out columns on contacts. Apply it before deploying this version,
+or the Replies tab and both email endpoints will error.
 
 The workspaces migration (`20260807000001_workspaces.sql`) adds the
 `workspaces` table and a `workspace_id` to every other table, backfills existing

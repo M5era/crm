@@ -84,6 +84,13 @@ export const MailIcon = (p: IconProps) => (
   </Svg>
 );
 
+export const InboxIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3 13h4l1.5 3h7l1.5-3h4" />
+    <path d="M5.2 5h13.6a2 2 0 0 1 1.9 1.4L23 13v4a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2v-4l2.3-6.6A2 2 0 0 1 5.2 5Z" />
+  </Svg>
+);
+
 export const PhoneIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M6.5 3h3l1.5 4-2 1.5a12 12 0 0 0 5.5 5.5l1.5-2 4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.2 2 2 0 0 1 6.5 3Z" />
