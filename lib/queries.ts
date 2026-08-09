@@ -160,12 +160,15 @@ export async function getPipeline(workspaceId: string) {
 export async function getContacts(
   workspaceId: string,
   search?: string,
+  lifecycle?: string,
 ): Promise<Array<ContactWithCompany & { lead_count: number; open_value: number }>> {
   const supabase = await createClient();
   let q = supabase
     .from("contacts")
     .select("*, company:companies(id, name, domain)")
     .eq("workspace_id", workspaceId);
+
+  if (lifecycle) q = q.eq("lifecycle", lifecycle);
 
   if (search) {
     const term = `%${search}%`;
@@ -386,4 +389,63 @@ export async function getContactOptions(workspaceId: string) {
     last_name: string | null;
     company_id: string | null;
   }>;
+}
+
+// ---------------------------------------------------------------- settings
+
+export async function getApiKeys(workspaceId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("api_keys")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as import("@/lib/types").ApiKey[];
+}
+
+export async function getImportRuns(workspaceId: string, limit = 8) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("import_runs")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as import("@/lib/types").ImportRun[];
+}
+
+/** How many deals sit in each stage — settings needs this to know what is
+ *  safe to delete. */
+export async function getStageUsage(workspaceId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .select("stage_id")
+    .eq("workspace_id", workspaceId);
+  if (error) throw error;
+  const counts = new Map<string, number>();
+  for (const row of data ?? []) {
+    const key = row.stage_id as string;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** Contacts grouped by lifecycle — the outreach funnel, which is deliberately
+ *  not the deal pipeline. */
+export async function getLifecycleCounts(workspaceId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("contacts")
+    .select("lifecycle")
+    .eq("workspace_id", workspaceId);
+  if (error) throw error;
+  const counts = new Map<string, number>();
+  for (const row of data ?? []) {
+    const key = (row.lifecycle as string) ?? "new";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
 }

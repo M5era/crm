@@ -8,6 +8,7 @@ import {
   ContactsIcon,
   DashboardIcon,
   PipelineIcon,
+  SettingsIcon,
 } from "@/components/icons";
 
 const ITEMS = [
@@ -16,6 +17,7 @@ const ITEMS = [
   { path: "/contacts", label: "Contacts", Icon: ContactsIcon },
   { path: "/companies", label: "Companies", Icon: CompaniesIcon },
   { path: "/analytics", label: "Analytics", Icon: AnalyticsIcon },
+  { path: "/settings", label: "Settings", Icon: SettingsIcon },
 ];
 
 /** A lead page belongs to the pipeline tab. */

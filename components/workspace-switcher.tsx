@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CheckIcon } from "@/components/icons";
+import { CheckIcon, PlusIcon } from "@/components/icons";
 import type { Workspace } from "@/lib/types";
 
 /**
@@ -115,6 +115,20 @@ export function WorkspaceSwitcher({
               </Link>
             );
           })}
+
+          <Link
+            href={`/${active.slug}/settings`}
+            role="menuitem"
+            className="mt-1 flex items-center gap-2.5 border-t border-line-soft px-2.5 py-2 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            <span
+              aria-hidden
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-dashed border-line"
+            >
+              <PlusIcon className="h-3.5 w-3.5" />
+            </span>
+            <span className="text-sm">Add a business</span>
+          </Link>
         </div>
       )}
     </div>

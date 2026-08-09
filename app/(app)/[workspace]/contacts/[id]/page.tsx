@@ -5,17 +5,17 @@ import {
   getActivities,
   getCompanyOptions,
   getContact,
-  getContactOptions,
   getLeads,
   getStages,
 } from "@/lib/queries";
 import { requireWorkspace } from "@/lib/workspace";
 import { ActivityTimeline } from "@/components/activity-timeline";
 import {
+  ConvertContactDialog,
   EditContactDialog,
   NewActivityDialog,
-  NewLeadDialog,
 } from "@/components/dialogs";
+import { LifecycleSelect } from "@/components/lifecycle";
 import { LeadList } from "@/components/lead-list";
 import { LinkIcon, MailIcon, PhoneIcon, TrashIcon } from "@/components/icons";
 import { Avatar, DetailRow, PageHeader, Section, StatCard } from "@/components/ui";
@@ -48,11 +48,10 @@ export default async function ContactPage({
   const contact = await getContact(workspace.id, id);
   if (!contact) notFound();
 
-  const [leads, activities, companies, contacts, stages] = await Promise.all([
+  const [leads, activities, companies, stages] = await Promise.all([
     getLeads(workspace.id, { contactId: id }),
     getActivities(workspace.id, { contactId: id }),
     getCompanyOptions(workspace.id),
-    getContactOptions(workspace.id),
     getStages(workspace.id),
   ]);
 
@@ -123,14 +122,10 @@ export default async function ContactPage({
             title="Deals"
             description="Every lead this person is attached to."
             actions={
-              <NewLeadDialog
+              <ConvertContactDialog
                 workspaceId={workspace.id}
+                contact={contact}
                 stages={stages}
-                companies={companies}
-                contacts={contacts}
-                defaultContactId={contact.id}
-                defaultCompanyId={contact.company_id ?? undefined}
-                label="New deal"
                 triggerClassName="btn btn-ghost"
               />
             }
@@ -139,17 +134,13 @@ export default async function ContactPage({
               workspaceSlug={workspace.slug}
               leads={leads}
               showCompany
-              emptyTitle="No deals for this contact"
-              emptyDescription="Create a deal to start tracking them in the pipeline."
+              emptyTitle="Not in the pipeline yet"
+              emptyDescription="Cold contacts stay off the board. Create a deal once there is a real conversation to track."
               action={
-                <NewLeadDialog
+                <ConvertContactDialog
                   workspaceId={workspace.id}
+                  contact={contact}
                   stages={stages}
-                  companies={companies}
-                  contacts={contacts}
-                  defaultContactId={contact.id}
-                  defaultCompanyId={contact.company_id ?? undefined}
-                  label="New deal"
                 />
               }
             />
@@ -209,6 +200,18 @@ export default async function ContactPage({
             </div>
           </div>
 
+          <Section
+            title="Outreach status"
+            description="Where this person sits in the funnel — separate from any deal."
+          >
+            <div className="px-4 py-4">
+              <LifecycleSelect
+                contactId={contact.id}
+                value={contact.lifecycle}
+              />
+            </div>
+          </Section>
+
           <Section title="Details">
             <div className="divide-y divide-line-soft">
               <DetailRow label="Email">
@@ -238,6 +241,11 @@ export default async function ContactPage({
               </DetailRow>
               <DetailRow label="Source">
                 {contact.source ?? "Unattributed"}
+              </DetailRow>
+              <DetailRow label="Last contacted">
+                {contact.last_contacted_at
+                  ? formatDate(contact.last_contacted_at)
+                  : "Never"}
               </DetailRow>
               <DetailRow label="Added">
                 {formatDate(contact.created_at)}
