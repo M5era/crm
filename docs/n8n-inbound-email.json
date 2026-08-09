@@ -1,0 +1,77 @@
+{
+  "name": "CRM — inbound email (iCloud IMAP)",
+  "nodes": [
+    {
+      "parameters": {
+        "postProcessAction": "read",
+        "format": "resolved",
+        "options": {
+          "customEmailConfig": "[\"UNSEEN\"]"
+        }
+      },
+      "id": "imap-trigger",
+      "name": "iCloud inbox",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [-260, 0],
+      "credentials": {
+        "imap": {
+          "id": "REPLACE_WITH_YOUR_IMAP_CREDENTIAL_ID",
+          "name": "iCloud IMAP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Flatten whatever the IMAP node hands us into the envelope the CRM expects.\n// Doing it here — rather than in the CRM — is what keeps the API transport\n// agnostic: swap IMAP for a provider webhook later and only this node changes.\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n\n  // mailparser returns addresses as { value: [{ address, name }], text }.\n  const addr = (field) => {\n    if (!field) return { email: null, name: null };\n    if (typeof field === 'string') {\n      const match = /<([^>]+)>/.exec(field);\n      return { email: (match ? match[1] : field).trim().toLowerCase(), name: null };\n    }\n    const first = Array.isArray(field.value) ? field.value[0] : null;\n    if (first) {\n      return {\n        email: (first.address || '').trim().toLowerCase() || null,\n        name: first.name || null,\n      };\n    }\n    return { email: null, name: null };\n  };\n\n  // Headers arrive as a Map, a plain object, or not at all depending on the\n  // node's format setting. Normalise to lowercase string values, because the\n  // CRM's classifier reads them by name.\n  const headers = {};\n  const raw = m.headers || m.headerLines || {};\n  const entries = raw instanceof Map ? [...raw.entries()] : Object.entries(raw);\n  for (const [key, value] of entries) {\n    if (value == null) continue;\n    headers[String(key).toLowerCase()] = Array.isArray(value)\n      ? value.join(' ')\n      : typeof value === 'object'\n        ? JSON.stringify(value)\n        : String(value);\n  }\n\n  const from = addr(m.from);\n  const to = addr(m.to);\n\n  out.push({\n    json: {\n      message_id: m.messageId || headers['message-id'] || null,\n      in_reply_to: m.inReplyTo || headers['in-reply-to'] || null,\n      references: m.references || headers['references'] || [],\n      from_email: from.email,\n      from_name: from.name,\n      to_email: to.email,\n      subject: m.subject || null,\n      text: m.textPlain || m.text || m.textHtml || null,\n      headers,\n      received_at: m.date || new Date().toISOString(),\n    },\n  });\n}\n\nreturn out;"
+      },
+      "id": "normalize",
+      "name": "Normalise envelope",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-40, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR-CRM-DOMAIN/api/v1/inbound-email",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameter": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_CRM_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "post-to-crm",
+      "name": "POST /api/v1/inbound-email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [200, 0]
+    }
+  ],
+  "connections": {
+    "iCloud inbox": {
+      "main": [[{ "node": "Normalise envelope", "type": "main", "index": 0 }]]
+    },
+    "Normalise envelope": {
+      "main": [[{ "node": "POST /api/v1/inbound-email", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

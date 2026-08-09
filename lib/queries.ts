@@ -6,6 +6,8 @@ import type {
   Company,
   Contact,
   ContactWithCompany,
+  EmailMessage,
+  EmailMessageWithContact,
   Lead,
   LeadWithRelations,
   Stage,
@@ -448,4 +450,76 @@ export async function getLifecycleCounts(workspaceId: string) {
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;
+}
+
+// ------------------------------------------------------------------- inbox
+
+/**
+ * Inbound mail, newest first. `unmatched` narrows to the queue of messages we
+ * could not attribute to anybody — the honest resting place for a reply whose
+ * sender is not in the CRM, and the one list worth clearing by hand.
+ */
+export async function getInboundMessages(
+  workspaceId: string,
+  classification?: string,
+  unmatched?: boolean,
+  limit = 200,
+): Promise<EmailMessageWithContact[]> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("email_messages")
+    .select("*, contact:contacts(id, first_name, last_name, email, title)")
+    .eq("workspace_id", workspaceId)
+    .eq("direction", "inbound");
+
+  if (classification) q = q.eq("classification", classification);
+  if (unmatched) q = q.is("contact_id", null);
+
+  const { data, error } = await q
+    .order("occurred_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    ...(row as unknown as EmailMessage),
+    contact: unwrap(row.contact as EmailMessageWithContact["contact"]),
+  }));
+}
+
+/** Inbound mail grouped by verdict, plus how much of it is unattributed. */
+export async function getInboundCounts(workspaceId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("email_messages")
+    .select("classification, contact_id")
+    .eq("workspace_id", workspaceId)
+    .eq("direction", "inbound");
+  if (error) throw error;
+
+  const counts = new Map<string, number>();
+  let unmatched = 0;
+  for (const row of data ?? []) {
+    const key = (row.classification as string) ?? "human";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    if (!row.contact_id) unmatched += 1;
+  }
+  return { counts, unmatched, total: (data ?? []).length };
+}
+
+/** The thread on one person's profile: what we sent and what came back. */
+export async function getContactEmails(
+  workspaceId: string,
+  contactId: string,
+  limit = 50,
+): Promise<EmailMessage[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("email_messages")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("contact_id", contactId)
+    .order("occurred_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as unknown as EmailMessage[];
 }

@@ -53,6 +53,9 @@ export type Contact = {
   workspace_id: string;
   lifecycle: Lifecycle;
   last_contacted_at: string | null;
+  last_reply_at: string | null;
+  bounced_at: string | null;
+  unsubscribed_at: string | null;
   first_name: string;
   last_name: string | null;
   email: string | null;
@@ -175,6 +178,105 @@ export const COMPANY_SIZES = [
   "501-1000",
   "1000+",
 ];
+
+/**
+ * Mail we sent, and mail that came back. Outbound rows exist so that inbound
+ * rows can be matched by Message-ID rather than by guessing at the sender.
+ */
+export type EmailDirection = "outbound" | "inbound";
+
+export type EmailClassification =
+  | "human"
+  | "auto_reply"
+  | "bounce"
+  | "unsubscribe";
+
+export type MatchedBy = "message_id" | "email" | "none";
+
+export type EmailMessage = {
+  id: string;
+  workspace_id: string;
+  direction: EmailDirection;
+  message_id: string;
+  in_reply_to: string | null;
+  reference_ids: string[];
+  contact_id: string | null;
+  lead_id: string | null;
+  subject: string | null;
+  from_email: string | null;
+  from_name: string | null;
+  to_email: string | null;
+  body: string | null;
+  classification: EmailClassification | null;
+  matched_by: MatchedBy | null;
+  headers: Record<string, string> | null;
+  occurred_at: string;
+  created_at: string;
+};
+
+export type EmailMessageWithContact = EmailMessage & { contact: ContactRef };
+
+/**
+ * How each verdict reads in the UI. Auto-replies and bounces are shown rather
+ * than hidden: knowing an address is dead is as useful as knowing someone
+ * answered, and a silently dropped bounce is how a list rots.
+ */
+export const CLASSIFICATIONS: Array<{
+  value: EmailClassification;
+  /** Plural, for filter chips that carry a count. */
+  label: string;
+  /** Singular, for the badge on one message. */
+  singular: string;
+  description: string;
+  color: string;
+}> = [
+  {
+    value: "human",
+    label: "Replies",
+    singular: "Reply",
+    description: "A person actually wrote back.",
+    color: "#199e70",
+  },
+  {
+    value: "auto_reply",
+    label: "Auto-replies",
+    singular: "Auto-reply",
+    description: "Out-of-office or vacation responder. Not a signal.",
+    color: "#6b7285",
+  },
+  {
+    value: "bounce",
+    label: "Bounces",
+    singular: "Bounce",
+    description: "Delivery failed — the address is bad.",
+    color: "#d4562f",
+  },
+  {
+    value: "unsubscribe",
+    label: "Opt-outs",
+    singular: "Opt-out",
+    description: "Asked not to be contacted again.",
+    color: "#b0812a",
+  },
+];
+
+export function classificationMeta(value: string | null) {
+  return (
+    CLASSIFICATIONS.find((c) => c.value === value) ?? {
+      value: "human" as EmailClassification,
+      label: "Unknown",
+      singular: "Unknown",
+      description: "Unclassified message.",
+      color: "#6b7285",
+    }
+  );
+}
+
+export const MATCHED_BY_LABELS: Record<MatchedBy, string> = {
+  message_id: "Matched on thread",
+  email: "Matched on address",
+  none: "Unmatched",
+};
 
 export type ApiKey = {
   id: string;
