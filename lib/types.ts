@@ -1,8 +1,23 @@
 export type LeadStatus = "open" | "won" | "lost";
 export type ActivityType = "note" | "call" | "email" | "meeting" | "task";
 
+/**
+ * A separate business. Every record below belongs to exactly one workspace and
+ * is invisible from the others — there is no cross-workspace view by design.
+ */
+export type Workspace = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  accent: string;
+  position: number;
+  created_at: string;
+};
+
 export type Stage = {
   id: string;
+  workspace_id: string;
   key: string;
   name: string;
   description: string | null;
@@ -13,6 +28,7 @@ export type Stage = {
 
 export type Company = {
   id: string;
+  workspace_id: string;
   name: string;
   domain: string | null;
   website: string | null;
@@ -24,8 +40,19 @@ export type Company = {
   updated_at: string;
 };
 
+export type Lifecycle =
+  | "new"
+  | "contacted"
+  | "replied"
+  | "qualified"
+  | "unqualified"
+  | "customer";
+
 export type Contact = {
   id: string;
+  workspace_id: string;
+  lifecycle: Lifecycle;
+  last_contacted_at: string | null;
   first_name: string;
   last_name: string | null;
   email: string | null;
@@ -41,6 +68,7 @@ export type Contact = {
 
 export type Lead = {
   id: string;
+  workspace_id: string;
   title: string;
   company_id: string | null;
   contact_id: string | null;
@@ -58,6 +86,7 @@ export type Lead = {
 
 export type Activity = {
   id: string;
+  workspace_id: string;
   type: ActivityType;
   subject: string;
   body: string | null;
@@ -146,3 +175,79 @@ export const COMPANY_SIZES = [
   "501-1000",
   "1000+",
 ];
+
+export type ApiKey = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  token_prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+};
+
+export type ImportRun = {
+  id: string;
+  workspace_id: string;
+  source: string;
+  entity: string;
+  created: number;
+  updated: number;
+  failed: number;
+  errors: Array<{ row: number; message: string }> | null;
+  author: string | null;
+  created_at: string;
+};
+
+/**
+ * Where a person sits in the outreach funnel. This is deliberately separate
+ * from the deal pipeline: a thousand cold contacts live here without ever
+ * appearing on the board. A deal is created only once someone replies.
+ */
+export const LIFECYCLES: Array<{
+  value: Lifecycle;
+  label: string;
+  description: string;
+  color: string;
+}> = [
+  {
+    value: "new",
+    label: "New",
+    description: "Imported, not yet contacted.",
+    color: "#6b7285",
+  },
+  {
+    value: "contacted",
+    label: "Contacted",
+    description: "Outreach sent, no response yet.",
+    color: "#2a78d6",
+  },
+  {
+    value: "replied",
+    label: "Replied",
+    description: "Responded — worth a real conversation.",
+    color: "#3987e5",
+  },
+  {
+    value: "qualified",
+    label: "Qualified",
+    description: "A genuine opportunity. Usually has a deal.",
+    color: "#199e70",
+  },
+  {
+    value: "unqualified",
+    label: "Unqualified",
+    description: "Not a fit, or asked not to be contacted.",
+    color: "#6b7285",
+  },
+  {
+    value: "customer",
+    label: "Customer",
+    description: "Has bought.",
+    color: "#0ca30c",
+  },
+];
+
+export function lifecycleMeta(value: string) {
+  return LIFECYCLES.find((l) => l.value === value) ?? LIFECYCLES[0];
+}

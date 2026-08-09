@@ -1,6 +1,13 @@
 import Link from "next/link";
-import { getCompanyOptions, getContacts } from "@/lib/queries";
-import { NewContactDialog } from "@/components/dialogs";
+import {
+  getCompanyOptions,
+  getContacts,
+  getLifecycleCounts,
+} from "@/lib/queries";
+import { requireWorkspace } from "@/lib/workspace";
+import { ImportDialog, NewContactDialog } from "@/components/dialogs";
+import { LifecycleBadge } from "@/components/lifecycle";
+import { LIFECYCLES } from "@/lib/types";
 import { SearchInput } from "@/components/search-input";
 import { Avatar, EmptyState, PageHeader } from "@/components/ui";
 import { ContactsIcon, MailIcon, PhoneIcon } from "@/components/icons";
@@ -10,15 +17,37 @@ export const metadata = { title: "Contacts" };
 export const dynamic = "force-dynamic";
 
 export default async function ContactsPage({
+  params,
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  params: Promise<{ workspace: string }>;
+  searchParams: Promise<{ q?: string; lifecycle?: string }>;
 }) {
-  const { q } = await searchParams;
-  const [contacts, companies] = await Promise.all([
-    getContacts(q),
-    getCompanyOptions(),
+  const [{ workspace: slug }, { q, lifecycle }] = await Promise.all([
+    params,
+    searchParams,
   ]);
+  const workspace = await requireWorkspace(slug);
+
+  const [contacts, companies, lifecycleCounts] = await Promise.all([
+    getContacts(workspace.id, q, lifecycle),
+    getCompanyOptions(workspace.id),
+    getLifecycleCounts(workspace.id),
+  ]);
+
+  const totalContacts = Array.from(lifecycleCounts.values()).reduce(
+    (sum, n) => sum + n,
+    0,
+  );
+
+  // Preserve the search term when switching lifecycle, and vice versa.
+  const filterHref = (value?: string) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (value) params.set("lifecycle", value);
+    const query = params.toString();
+    return `/${workspace.slug}/contacts${query ? `?${query}` : ""}`;
+  };
 
   return (
     <>
@@ -29,16 +58,58 @@ export default async function ContactsPage({
             ? `${contacts.length} ${contacts.length === 1 ? "match" : "matches"} for “${q}”`
             : `${contacts.length} ${contacts.length === 1 ? "person" : "people"} in the CRM`
         }
-        actions={<NewContactDialog companies={companies} />}
+        actions={
+          <>
+            <ImportDialog workspaceId={workspace.id} entity="contacts" />
+            <NewContactDialog workspaceId={workspace.id} companies={companies} />
+          </>
+        }
       />
 
       <div className="px-5 py-5 sm:px-8">
-        <div className="mb-4">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
           <SearchInput
-            action="/contacts"
+            action={`/${workspace.slug}/contacts`}
             placeholder="Search name, email or title…"
             defaultValue={q}
           />
+          {q && <input type="hidden" name="q" value={q} />}
+
+          {/* The outreach funnel. Deliberately not the deal pipeline: people
+              sit here for as long as it takes, without crowding the board. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Link
+              href={filterHref()}
+              className={`chip ${
+                lifecycle
+                  ? "bg-surface-2 text-ink-muted hover:text-ink"
+                  : "bg-surface-3 text-ink"
+              }`}
+            >
+              All {totalContacts > 0 ? totalContacts : ""}
+            </Link>
+            {LIFECYCLES.map((l) => {
+              const count = lifecycleCounts.get(l.value) ?? 0;
+              if (count === 0 && lifecycle !== l.value) return null;
+              const active = lifecycle === l.value;
+              return (
+                <Link
+                  key={l.value}
+                  href={filterHref(l.value)}
+                  title={l.description}
+                  className="chip"
+                  style={{
+                    backgroundColor: active
+                      ? `color-mix(in srgb, ${l.color} 24%, transparent)`
+                      : "var(--color-surface-2)",
+                    color: active ? l.color : "var(--color-ink-muted)",
+                  }}
+                >
+                  {l.label} {count}
+                </Link>
+              );
+            })}
+          </div>
         </div>
 
         <div className="card overflow-hidden">
@@ -49,15 +120,20 @@ export default async function ContactsPage({
               description={
                 q
                   ? "Try a different name, email or job title."
-                  : "Add the people you are talking to — they can be linked to companies and deals."
+                  : "Add people one at a time, or import a list. Imported contacts do not touch the deal pipeline."
               }
               action={
-                !q ? <NewContactDialog companies={companies} /> : undefined
+                !q ? (
+                  <NewContactDialog
+                    workspaceId={workspace.id}
+                    companies={companies}
+                  />
+                ) : undefined
               }
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[46rem] text-sm">
+              <table className="w-full min-w-[54rem] text-sm">
                 <thead>
                   <tr className="border-b border-line-soft text-left">
                     <th className="label-caps px-4 py-2.5 font-semibold">
@@ -68,6 +144,9 @@ export default async function ContactsPage({
                     </th>
                     <th className="label-caps px-4 py-2.5 font-semibold">
                       Contact
+                    </th>
+                    <th className="label-caps px-4 py-2.5 font-semibold">
+                      Status
                     </th>
                     <th className="label-caps px-4 py-2.5 text-right font-semibold">
                       Deals
@@ -89,7 +168,7 @@ export default async function ContactsPage({
                       >
                         <td className="px-4 py-3">
                           <Link
-                            href={`/contacts/${contact.id}`}
+                            href={`/${workspace.slug}/contacts/${contact.id}`}
                             className="flex items-center gap-3"
                           >
                             <Avatar name={name} size={34} />
@@ -106,7 +185,7 @@ export default async function ContactsPage({
                         <td className="px-4 py-3">
                           {contact.company ? (
                             <Link
-                              href={`/companies/${contact.company.id}`}
+                              href={`/${workspace.slug}/companies/${contact.company.id}`}
                               className="text-ink-muted hover:text-brand-soft"
                             >
                               {contact.company.name}
@@ -139,6 +218,9 @@ export default async function ContactsPage({
                               <span className="text-ink-faint">—</span>
                             )}
                           </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <LifecycleBadge value={contact.lifecycle} />
                         </td>
                         <td className="px-4 py-3 text-right text-ink-muted">
                           {contact.lead_count}

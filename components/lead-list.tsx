@@ -7,12 +7,14 @@ import { PipelineIcon } from "@/components/icons";
 
 /** Compact list of deals, used on contact and company profiles. */
 export function LeadList({
+  workspaceSlug,
   leads,
   emptyTitle = "No deals yet",
   emptyDescription,
   action,
   showCompany = false,
 }: {
+  workspaceSlug: string;
   leads: LeadWithRelations[];
   emptyTitle?: string;
   emptyDescription?: string;
@@ -35,7 +37,7 @@ export function LeadList({
       {leads.map((lead) => (
         <li key={lead.id}>
           <Link
-            href={`/leads/${lead.id}`}
+            href={`/${workspaceSlug}/leads/${lead.id}`}
             className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 transition-colors hover:bg-surface-2/60"
           >
             <div className="min-w-0 flex-1">

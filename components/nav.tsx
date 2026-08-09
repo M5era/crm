@@ -8,32 +8,36 @@ import {
   ContactsIcon,
   DashboardIcon,
   PipelineIcon,
+  SettingsIcon,
 } from "@/components/icons";
 
 const ITEMS = [
-  { href: "/", label: "Dashboard", Icon: DashboardIcon, exact: true },
-  { href: "/pipeline", label: "Pipeline", Icon: PipelineIcon },
-  { href: "/contacts", label: "Contacts", Icon: ContactsIcon },
-  { href: "/companies", label: "Companies", Icon: CompaniesIcon },
-  { href: "/analytics", label: "Analytics", Icon: AnalyticsIcon },
+  { path: "", label: "Dashboard", Icon: DashboardIcon, exact: true },
+  { path: "/pipeline", label: "Pipeline", Icon: PipelineIcon },
+  { path: "/contacts", label: "Contacts", Icon: ContactsIcon },
+  { path: "/companies", label: "Companies", Icon: CompaniesIcon },
+  { path: "/analytics", label: "Analytics", Icon: AnalyticsIcon },
+  { path: "/settings", label: "Settings", Icon: SettingsIcon },
 ];
 
 /** A lead page belongs to the pipeline tab. */
-function isActive(pathname: string, href: string, exact?: boolean) {
+function isActive(pathname: string, href: string, base: string, exact?: boolean) {
   if (exact) return pathname === href;
-  if (href === "/pipeline") {
-    return pathname.startsWith("/pipeline") || pathname.startsWith("/leads");
+  if (href === `${base}/pipeline`) {
+    return pathname.startsWith(href) || pathname.startsWith(`${base}/leads`);
   }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function SidebarNav() {
+export function SidebarNav({ workspaceSlug }: { workspaceSlug: string }) {
   const pathname = usePathname();
+  const base = `/${workspaceSlug}`;
 
   return (
     <nav className="flex flex-col gap-1">
-      {ITEMS.map(({ href, label, Icon, exact }) => {
-        const active = isActive(pathname, href, exact);
+      {ITEMS.map(({ path, label, Icon, exact }) => {
+        const href = `${base}${path}`;
+        const active = isActive(pathname, href, base, exact);
         return (
           <Link
             key={href}
@@ -46,7 +50,9 @@ export function SidebarNav() {
           >
             <Icon
               className={`h-[18px] w-[18px] shrink-0 ${
-                active ? "text-brand-soft" : "text-ink-faint group-hover:text-ink-muted"
+                active
+                  ? "text-brand-soft"
+                  : "text-ink-faint group-hover:text-ink-muted"
               }`}
             />
             {label}
@@ -57,13 +63,15 @@ export function SidebarNav() {
   );
 }
 
-export function MobileNav() {
+export function MobileNav({ workspaceSlug }: { workspaceSlug: string }) {
   const pathname = usePathname();
+  const base = `/${workspaceSlug}`;
 
   return (
     <nav className="flex gap-1 overflow-x-auto px-3 pb-3">
-      {ITEMS.map(({ href, label, Icon, exact }) => {
-        const active = isActive(pathname, href, exact);
+      {ITEMS.map(({ path, label, Icon, exact }) => {
+        const href = `${base}${path}`;
+        const active = isActive(pathname, href, base, exact);
         return (
           <Link
             key={href}

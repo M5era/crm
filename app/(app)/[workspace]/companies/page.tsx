@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getCompanies } from "@/lib/queries";
+import { requireWorkspace } from "@/lib/workspace";
 import { NewCompanyDialog } from "@/components/dialogs";
 import { SearchInput } from "@/components/search-input";
 import { Avatar, EmptyState, PageHeader } from "@/components/ui";
@@ -10,12 +11,16 @@ export const metadata = { title: "Companies" };
 export const dynamic = "force-dynamic";
 
 export default async function CompaniesPage({
+  params,
   searchParams,
 }: {
+  params: Promise<{ workspace: string }>;
   searchParams: Promise<{ q?: string }>;
 }) {
-  const { q } = await searchParams;
-  const companies = await getCompanies(q);
+  const [{ workspace: slug }, { q }] = await Promise.all([params, searchParams]);
+  const workspace = await requireWorkspace(slug);
+
+  const companies = await getCompanies(workspace.id, q);
 
   return (
     <>
@@ -26,13 +31,13 @@ export default async function CompaniesPage({
             ? `${companies.length} ${companies.length === 1 ? "match" : "matches"} for “${q}”`
             : `${companies.length} ${companies.length === 1 ? "organisation" : "organisations"} in the CRM`
         }
-        actions={<NewCompanyDialog />}
+        actions={<NewCompanyDialog workspaceId={workspace.id} />}
       />
 
       <div className="px-5 py-5 sm:px-8">
         <div className="mb-4">
           <SearchInput
-            action="/companies"
+            action={`/${workspace.slug}/companies`}
             placeholder="Search name, domain or industry…"
             defaultValue={q}
           />
@@ -48,7 +53,9 @@ export default async function CompaniesPage({
                   ? "Try a different name, domain or industry."
                   : "Add the organisations you sell to. Contacts and deals link back to them."
               }
-              action={!q ? <NewCompanyDialog /> : undefined}
+              action={
+                !q ? <NewCompanyDialog workspaceId={workspace.id} /> : undefined
+              }
             />
           </div>
         ) : (
@@ -56,7 +63,7 @@ export default async function CompaniesPage({
             {companies.map((company) => (
               <Link
                 key={company.id}
-                href={`/companies/${company.id}`}
+                href={`/${workspace.slug}/companies/${company.id}`}
                 className="card p-4 transition-colors hover:border-line"
               >
                 <div className="flex items-start gap-3">

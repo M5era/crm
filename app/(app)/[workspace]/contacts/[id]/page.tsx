@@ -5,16 +5,17 @@ import {
   getActivities,
   getCompanyOptions,
   getContact,
-  getContactOptions,
   getLeads,
   getStages,
 } from "@/lib/queries";
+import { requireWorkspace } from "@/lib/workspace";
 import { ActivityTimeline } from "@/components/activity-timeline";
 import {
+  ConvertContactDialog,
   EditContactDialog,
   NewActivityDialog,
-  NewLeadDialog,
 } from "@/components/dialogs";
+import { LifecycleSelect } from "@/components/lifecycle";
 import { LeadList } from "@/components/lead-list";
 import { LinkIcon, MailIcon, PhoneIcon, TrashIcon } from "@/components/icons";
 import { Avatar, DetailRow, PageHeader, Section, StatCard } from "@/components/ui";
@@ -25,10 +26,11 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ workspace: string; id: string }>;
 }) {
-  const { id } = await params;
-  const contact = await getContact(id);
+  const { workspace: slug, id } = await params;
+  const workspace = await requireWorkspace(slug);
+  const contact = await getContact(workspace.id, id);
   return {
     title: contact
       ? [contact.first_name, contact.last_name].filter(Boolean).join(" ")
@@ -39,18 +41,18 @@ export async function generateMetadata({
 export default async function ContactPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ workspace: string; id: string }>;
 }) {
-  const { id } = await params;
-  const contact = await getContact(id);
+  const { workspace: slug, id } = await params;
+  const workspace = await requireWorkspace(slug);
+  const contact = await getContact(workspace.id, id);
   if (!contact) notFound();
 
-  const [leads, activities, companies, contacts, stages] = await Promise.all([
-    getLeads({ contactId: id }),
-    getActivities({ contactId: id }),
-    getCompanyOptions(),
-    getContactOptions(),
-    getStages(),
+  const [leads, activities, companies, stages] = await Promise.all([
+    getLeads(workspace.id, { contactId: id }),
+    getActivities(workspace.id, { contactId: id }),
+    getCompanyOptions(workspace.id),
+    getStages(workspace.id),
   ]);
 
   const name = [contact.first_name, contact.last_name]
@@ -79,10 +81,15 @@ export default async function ContactPage({
         }
         actions={
           <>
-            <NewActivityDialog contactId={contact.id} />
+            <NewActivityDialog workspaceId={workspace.id} contactId={contact.id} />
             <EditContactDialog contact={contact} companies={companies} />
             <form action={deleteContact}>
               <input type="hidden" name="id" value={contact.id} />
+              <input
+                type="hidden"
+                name="workspace_slug"
+                value={workspace.slug}
+              />
               <button
                 type="submit"
                 className="btn btn-danger"
@@ -115,30 +122,25 @@ export default async function ContactPage({
             title="Deals"
             description="Every lead this person is attached to."
             actions={
-              <NewLeadDialog
+              <ConvertContactDialog
+                workspaceId={workspace.id}
+                contact={contact}
                 stages={stages}
-                companies={companies}
-                contacts={contacts}
-                defaultContactId={contact.id}
-                defaultCompanyId={contact.company_id ?? undefined}
-                label="New deal"
                 triggerClassName="btn btn-ghost"
               />
             }
           >
             <LeadList
+              workspaceSlug={workspace.slug}
               leads={leads}
               showCompany
-              emptyTitle="No deals for this contact"
-              emptyDescription="Create a deal to start tracking them in the pipeline."
+              emptyTitle="Not in the pipeline yet"
+              emptyDescription="Cold contacts stay off the board. Create a deal once there is a real conversation to track."
               action={
-                <NewLeadDialog
+                <ConvertContactDialog
+                  workspaceId={workspace.id}
+                  contact={contact}
                   stages={stages}
-                  companies={companies}
-                  contacts={contacts}
-                  defaultContactId={contact.id}
-                  defaultCompanyId={contact.company_id ?? undefined}
-                  label="New deal"
                 />
               }
             />
@@ -154,7 +156,7 @@ export default async function ContactPage({
 
           <Section
             title="Activity"
-            actions={<NewActivityDialog contactId={contact.id} />}
+            actions={<NewActivityDialog workspaceId={workspace.id} contactId={contact.id} />}
           >
             <ActivityTimeline activities={activities} />
           </Section>
@@ -198,6 +200,18 @@ export default async function ContactPage({
             </div>
           </div>
 
+          <Section
+            title="Outreach status"
+            description="Where this person sits in the funnel — separate from any deal."
+          >
+            <div className="px-4 py-4">
+              <LifecycleSelect
+                contactId={contact.id}
+                value={contact.lifecycle}
+              />
+            </div>
+          </Section>
+
           <Section title="Details">
             <div className="divide-y divide-line-soft">
               <DetailRow label="Email">
@@ -216,7 +230,7 @@ export default async function ContactPage({
               <DetailRow label="Company">
                 {contact.company ? (
                   <Link
-                    href={`/companies/${contact.company.id}`}
+                    href={`/${workspace.slug}/companies/${contact.company.id}`}
                     className="text-brand-soft hover:underline"
                   >
                     {contact.company.name}
@@ -227,6 +241,11 @@ export default async function ContactPage({
               </DetailRow>
               <DetailRow label="Source">
                 {contact.source ?? "Unattributed"}
+              </DetailRow>
+              <DetailRow label="Last contacted">
+                {contact.last_contacted_at
+                  ? formatDate(contact.last_contacted_at)
+                  : "Never"}
               </DetailRow>
               <DetailRow label="Added">
                 {formatDate(contact.created_at)}

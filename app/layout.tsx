@@ -3,11 +3,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "Inflate AI CRM",
-    template: "%s · Inflate AI CRM",
+    default: "Interlinked CRM",
+    template: "%s · Interlinked CRM",
   },
   description:
-    "Contacts, companies, lead pipeline and revenue analytics for Inflate AI.",
+    "Contacts, companies, lead pipelines and revenue analytics, one workspace per business.",
 };
 
 export default function RootLayout({

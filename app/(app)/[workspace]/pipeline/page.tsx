@@ -4,6 +4,7 @@ import {
   getPipeline,
   getStages,
 } from "@/lib/queries";
+import { requireWorkspace } from "@/lib/workspace";
 import { PipelineBoard } from "@/components/pipeline-board";
 import { NewLeadDialog } from "@/components/dialogs";
 import { PageHeader } from "@/components/ui";
@@ -12,12 +13,19 @@ import { money } from "@/lib/format";
 export const metadata = { title: "Pipeline" };
 export const dynamic = "force-dynamic";
 
-export default async function PipelinePage() {
+export default async function PipelinePage({
+  params,
+}: {
+  params: Promise<{ workspace: string }>;
+}) {
+  const { workspace: slug } = await params;
+  const workspace = await requireWorkspace(slug);
+
   const [columns, stages, companies, contacts] = await Promise.all([
-    getPipeline(),
-    getStages(),
-    getCompanyOptions(),
-    getContactOptions(),
+    getPipeline(workspace.id),
+    getStages(workspace.id),
+    getCompanyOptions(workspace.id),
+    getContactOptions(workspace.id),
   ]);
 
   const totalLeads = columns.reduce((sum, c) => sum + c.leads.length, 0);
@@ -31,11 +39,12 @@ export default async function PipelinePage() {
         title="Pipeline"
         subtitle={
           totalLeads === 0
-            ? "Five stages, ready for your first lead."
+            ? `${columns.length} stages, ready for your first lead.`
             : `${totalLeads} active ${totalLeads === 1 ? "lead" : "leads"} · ${money(totalValue)} still in play`
         }
         actions={
           <NewLeadDialog
+            workspaceId={workspace.id}
             stages={stages}
             companies={companies}
             contacts={contacts}
@@ -44,7 +53,7 @@ export default async function PipelinePage() {
       />
 
       <div className="pt-5">
-        <PipelineBoard columns={columns} />
+        <PipelineBoard columns={columns} workspaceSlug={workspace.slug} />
       </div>
 
       <p className="px-5 pb-8 text-xs text-ink-faint sm:px-8">

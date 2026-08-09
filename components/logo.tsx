@@ -6,7 +6,7 @@ export function Logo({ size = 32 }: { size?: number }) {
       viewBox="0 0 40 40"
       fill="none"
       role="img"
-      aria-label="Inflate AI"
+      aria-label="Interlinked CRM"
     >
       <defs>
         <linearGradient id="inflate-mark" x1="0" y1="0" x2="40" y2="40">
@@ -15,7 +15,7 @@ export function Logo({ size = 32 }: { size?: number }) {
         </linearGradient>
       </defs>
       <rect width="40" height="40" rx="11" fill="url(#inflate-mark)" />
-      {/* An upward step chart — the "inflate" in Inflate AI. */}
+      {/* An upward step chart: growth, which is what every workspace tracks. */}
       <path
         d="M11 26.5 L17 20.5 L22 24 L29.5 14.5"
         stroke="white"

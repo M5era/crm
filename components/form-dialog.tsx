@@ -44,10 +44,18 @@ export function FormDialog({
   const titleId = useId();
 
   useEffect(() => {
-    if (state.ok && open) {
-      setOpen(false);
+    if (!state.ok || !open) return;
+
+    // A one-time secret (an API key) must stay on screen until the user has
+    // copied it — closing the dialog would lose it for good.
+    if (state.secret) {
       router.refresh();
+      return;
     }
+
+    setOpen(false);
+    router.refresh();
+    if (state.redirectTo) router.push(state.redirectTo);
     // Only react to a successful save.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
@@ -118,15 +126,23 @@ export function FormDialog({
                 </p>
               )}
 
+              {state.ok && state.message && (
+                <p className="mx-5 mb-3 rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-xs text-positive">
+                  {state.message}
+                </p>
+              )}
+
+              {state.secret && <SecretReveal secret={state.secret} />}
+
               <div className="flex justify-end gap-2 border-t border-line-soft px-5 py-3.5">
                 <button
                   type="button"
                   className="btn btn-ghost"
                   onClick={() => setOpen(false)}
                 >
-                  Cancel
+                  {state.secret ? "Done" : "Cancel"}
                 </button>
-                <SubmitButton label={submitLabel} />
+                {!state.secret && <SubmitButton label={submitLabel} />}
               </div>
             </form>
           </div>
@@ -139,4 +155,40 @@ export function FormDialog({
 /** Two fields side by side on wider screens. */
 export function FieldRow({ children }: { children: React.ReactNode }) {
   return <div className="grid gap-4 sm:grid-cols-2">{children}</div>;
+}
+
+/**
+ * Shows a value that exists exactly once. The server stores only a hash, so if
+ * this is dismissed without copying, the key is gone and a new one is needed.
+ */
+function SecretReveal({ secret }: { secret: string }) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <div className="mx-5 mb-3 rounded-lg border border-warning/30 bg-warning/10 p-3">
+      <p className="text-xs font-medium text-warning">
+        Copy this now — it is shown once and cannot be retrieved again.
+      </p>
+      <div className="mt-2 flex items-center gap-2">
+        <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded bg-surface-3 px-2 py-1.5 font-mono text-xs text-ink">
+          {secret}
+        </code>
+        <button
+          type="button"
+          className="btn btn-ghost shrink-0"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(secret);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            } catch {
+              setCopied(false);
+            }
+          }}
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+    </div>
+  );
 }
