@@ -574,7 +574,7 @@ export function ConvertContactDialog({
           </select>
         </div>
         <div>
-          <label htmlFor="value">Deal value (USD)</label>
+          <label htmlFor="value">Deal value (EUR)</label>
           <input id="value" name="value" type="number" min="0" step="100" placeholder="0" />
         </div>
       </div>
