@@ -1,17 +1,22 @@
-const currency = new Intl.NumberFormat("en-US", {
+// The business is based in Portugal, so everything is euros. The locale stays
+// English because the interface is: `en-IE` is the euro locale that keeps the
+// symbol in front of the number, which is what every layout here was built
+// around. Switching to `pt-PT` would render "12 500 €" and push totals off the
+// right edge of the narrower cards.
+const currency = new Intl.NumberFormat("en-IE", {
   style: "currency",
-  currency: "USD",
+  currency: "EUR",
   maximumFractionDigits: 0,
 });
 
-const currencyPrecise = new Intl.NumberFormat("en-US", {
+const currencyPrecise = new Intl.NumberFormat("en-IE", {
   style: "currency",
-  currency: "USD",
+  currency: "EUR",
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-/** $12,500 — used everywhere totals are shown. */
+/** €12,500 — used everywhere totals are shown. */
 export function money(value: number | null | undefined) {
   return currency.format(Number(value ?? 0));
 }
@@ -20,13 +25,13 @@ export function moneyPrecise(value: number | null | undefined) {
   return currencyPrecise.format(Number(value ?? 0));
 }
 
-/** $12.5k / $1.2M — for tight spaces like chart axes and card badges. */
+/** €12.5k / €1.2M — for tight spaces like chart axes and card badges. */
 export function compactMoney(value: number | null | undefined) {
   const n = Number(value ?? 0);
   const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}M`;
-  if (abs >= 1_000) return `$${(n / 1_000).toFixed(abs >= 10_000 ? 0 : 1)}k`;
-  return `$${n.toFixed(0)}`;
+  if (abs >= 1_000_000) return `€${(n / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}M`;
+  if (abs >= 1_000) return `€${(n / 1_000).toFixed(abs >= 10_000 ? 0 : 1)}k`;
+  return `€${n.toFixed(0)}`;
 }
 
 export function percent(value: number, digits = 0) {

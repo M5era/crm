@@ -173,7 +173,7 @@ export function LeadFields({
         />
         <Text
           name="value"
-          label="Deal value (USD)"
+          label="Deal value (EUR)"
           type="number"
           min="0"
           step="100"

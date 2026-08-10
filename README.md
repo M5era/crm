@@ -147,22 +147,37 @@ latency, invisible for outreach.
    account was given.
 3. Import [`docs/n8n-inbound-email.json`](docs/n8n-inbound-email.json), then set
    the credential, your CRM URL and an API key on the HTTP node.
-4. In the sequencer, add one HTTP node straight after the send:
 
-   ```
-   POST https://<crm>/api/v1/outbound-email
-   Authorization: Bearer crm_live_…
+### The sending side
 
-   { "message_id": "<id returned by the send node>",
-     "contact_email": "jane@acme.com",
-     "subject": "…" }
-   ```
+[`docs/n8n-outbound-email.json`](docs/n8n-outbound-email.json) is a complete
+outreach run: it pulls contacts from the CRM, drops anyone bounced or opted out,
+sends over iCloud SMTP, and posts each `Message-ID` back. If you already have a
+send flow, copy its last two nodes — **Extract Message-ID** and
+**POST /api/v1/outbound-email** — onto the end of yours instead of using it
+whole.
 
-   If the send node does not surface a `Message-ID`, set one yourself on the
-   outgoing mail and post that same value. Skipping this step still leaves
-   from-address matching working — you just lose thread-accurate attribution,
-   and `contact_matched: false` in the response tells you when that has
-   happened.
+The SMTP credential is the same app-specific password as IMAP:
+
+| Setting | Value |
+|---|---|
+| Host | `smtp.mail.me.com` |
+| Port | `587` (STARTTLS — leave SSL/TLS **off**) |
+| User | the same iCloud Mail address as the IMAP credential |
+| Password | the app-specific password |
+
+Send *from* an address the account actually owns, custom domain included.
+iCloud rejects a `From` it does not recognise, and a rejected send is the one
+failure this pipeline cannot recover from.
+
+Recording the `Message-ID` is the step worth not skipping. Without it a reply
+still matches on the from-address, so most things keep working — which is
+exactly why the gap goes unnoticed. What you lose is every reply from a second
+address, and any idea of which campaign a reply answers.
+
+`contact_matched: false` in the response means the recipient is not in that
+workspace, so replies to that thread will land in the unmatched queue. Worth an
+alert in n8n.
 
 Sending through iCloud is capped at 1,000 messages and 1,000 recipients a day.
 That is a personal-use mailbox, so it gives you no bounce feedback of its own —

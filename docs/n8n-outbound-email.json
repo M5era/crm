@@ -1,0 +1,164 @@
+{
+  "name": "CRM — outbound email (iCloud SMTP)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Before importing\n\n1. Create an **Header Auth** credential named `CRM API key`:\n   - Name: `Authorization`\n   - Value: `Bearer <your CRM API key>`\n   Both HTTP nodes reference it, so the key never lives in this file.\n2. Create an **SMTP** credential for iCloud and attach it to *Send via iCloud*.\n3. Replace the two `REPLACE_WITH_*` credential ids, or just re-pick the\n   credentials in the UI after import.\n\n### Known gap: company names in the subject\n\n`GET /api/v1/contacts` returns the contacts row verbatim (`select(\"*\")`), and\nthat row carries `company_id` — a uuid — not a joined company object. Any\nsubject line referencing `company.name` therefore renders empty for every\ncontact. The subject below deliberately avoids it. To personalise by company,\neither add a join to the contacts endpoint or fetch `/api/v1/companies` and\nmerge on `company_id`.",
+        "height": 460,
+        "width": 460
+      },
+      "id": "note-setup",
+      "name": "Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-900, -260]
+    },
+    {
+      "parameters": {},
+      "id": "trigger",
+      "name": "Run outreach",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-620, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://crm.interlinked.dev/api/v1/contacts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameter": [
+            { "name": "lifecycle", "value": "new" },
+            { "name": "limit", "value": "25" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-contacts",
+      "name": "Who to email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-400, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CRM_API_CREDENTIAL_ID",
+          "name": "CRM API key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "contacts",
+        "options": {}
+      },
+      "id": "split",
+      "name": "One item per contact",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [-180, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Skip anyone we must not email, whatever their lifecycle says. A bounced\n// address and an explicit opt-out both outrank a campaign.\n//\n// The from-address and the subject are also settled here, once, so that the\n// send node and the record call cannot disagree about what actually went out.\n// The SMTP response does not echo the subject back, so if it were only set on\n// the send node the CRM would record null for every message.\n\nconst FROM = 'marc@serafines.de';\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const c = item.json;\n\n  if (!c.email) continue;\n  if (c.bounced_at) continue;\n  if (c.unsubscribed_at) continue;\n\n  out.push({\n    json: {\n      ...c,\n      _from: FROM,\n      // No company reference here on purpose — see the Setup note. The\n      // contacts endpoint returns company_id, not a company object, so\n      // {{ $json.company.name }} renders empty for everyone.\n      _subject: 'Quick question about your setup',\n    },\n  });\n}\n\nreturn out;"
+      },
+      "id": "suppress",
+      "name": "Drop bounced and opted-out",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [40, 0]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json._from }}",
+        "toEmail": "={{ $json.email }}",
+        "subject": "={{ $json._subject }}",
+        "emailFormat": "text",
+        "text": "=Hi {{ $json.first_name }},\n\nReplace this with your actual message.\n\nMarc",
+        "options": {}
+      },
+      "id": "send",
+      "name": "Send via iCloud",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [260, 0],
+      "credentials": {
+        "smtp": {
+          "id": "REPLACE_WITH_YOUR_SMTP_CREDENTIAL_ID",
+          "name": "iCloud SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pair each send result back up with the contact it went to, and pull out the\n// Message-ID. That id is the entire basis of thread-accurate reply matching:\n// without it the CRM can still match a reply by from-address, but it cannot\n// tell which campaign the reply answers, and it misses anyone who writes back\n// from a different address.\n//\n// itemMatching() is what does the pairing. Indexing the source node by\n// position instead — all()[i] — looks equivalent and usually is, right up\n// until one send fails or the batch is reordered; then contacts and message\n// ids cross silently and the CRM records a Message-ID against the wrong\n// person. That is unrecoverable after the fact, because nothing downstream\n// knows the pairing was ever wrong.\n\nconst out = [];\nconst items = $input.all();\n\nfor (let i = 0; i < items.length; i++) {\n  const sent = items[i].json;\n  const contact = $('Drop bounced and opted-out').itemMatching(i).json;\n\n  // nodemailer reports per-recipient outcomes. An accepted envelope that\n  // rejected the only recipient is not a delivered email, and recording it\n  // would leave the CRM waiting for a reply to a message nobody received.\n  const rejected = Array.isArray(sent.rejected) ? sent.rejected : [];\n  if (rejected.length > 0) {\n    console.warn(\n      `SMTP rejected ${rejected.join(', ')} for ${contact.email}. Not ` +\n      `recording a send for this contact.`,\n    );\n    continue;\n  }\n\n  const messageId =\n    sent.messageId || sent.message_id || sent.messageID || null;\n\n  if (!messageId) {\n    // Loud on purpose. Silently losing threading is the failure mode that is\n    // hardest to notice later, because replies still half-work.\n    console.warn(\n      `No Message-ID returned for ${contact.email}. Reply matching for this ` +\n      `message will fall back to the from-address.`,\n    );\n    continue;\n  }\n\n  out.push({\n    json: {\n      message_id: messageId,\n      contact_email: contact.email,\n      from_email: contact._from,\n      subject: contact._subject,\n      sent_at: new Date().toISOString(),\n    },\n  });\n}\n\nreturn out;"
+      },
+      "id": "extract-id",
+      "name": "Extract Message-ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://crm.interlinked.dev/api/v1/outbound-email",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "record",
+      "name": "POST /api/v1/outbound-email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CRM_API_CREDENTIAL_ID",
+          "name": "CRM API key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// The endpoint answers with contact_matched. A false there means the email\n// went to somebody the CRM does not know, so any reply to this thread will\n// land in the unmatched queue instead of on a person — the API's own comment\n// calls this out as worth alerting on.\n//\n// This is why the POST above no longer sets neverError: with errors\n// suppressed, a 400 for a missing message_id and a 500 from Supabase both\n// looked like success, and this check never saw them either.\n\nfor (const item of $input.all()) {\n  if (item.json.contact_matched === false) {\n    console.warn(\n      `Recorded ${item.json.message_id} but no contact matched ` +\n      `${item.json.contact_email}. Replies will go to the unmatched queue.`,\n    );\n  }\n}\n\nreturn $input.all();"
+      },
+      "id": "warn-unmatched",
+      "name": "Warn on unmatched contacts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 0]
+    }
+  ],
+  "connections": {
+    "Run outreach": {
+      "main": [[{ "node": "Who to email", "type": "main", "index": 0 }]]
+    },
+    "Who to email": {
+      "main": [[{ "node": "One item per contact", "type": "main", "index": 0 }]]
+    },
+    "One item per contact": {
+      "main": [[{ "node": "Drop bounced and opted-out", "type": "main", "index": 0 }]]
+    },
+    "Drop bounced and opted-out": {
+      "main": [[{ "node": "Send via iCloud", "type": "main", "index": 0 }]]
+    },
+    "Send via iCloud": {
+      "main": [[{ "node": "Extract Message-ID", "type": "main", "index": 0 }]]
+    },
+    "Extract Message-ID": {
+      "main": [[{ "node": "POST /api/v1/outbound-email", "type": "main", "index": 0 }]]
+    },
+    "POST /api/v1/outbound-email": {
+      "main": [[{ "node": "Warn on unmatched contacts", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}
