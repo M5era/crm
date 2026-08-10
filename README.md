@@ -133,11 +133,18 @@ latency, invisible for outreach.
    |---|---|
    | Host | `imap.mail.me.com` |
    | Port | `993`, SSL/TLS |
-   | User | your **`@icloud.com`** address — *not* the custom-domain alias |
+   | User | your **iCloud Mail** address — `@me.com`, `@icloud.com` or `@mac.com` |
    | Password | the app-specific password |
 
    Custom-domain mail lands in the same mailbox, so one connection covers every
-   domain. Using the alias as the username is the usual reason a login fails.
+   domain.
+
+   The username is the usual reason a login fails. It must be the iCloud Mail
+   address, which is often **not** the address you sign in to Apple with — an
+   Apple ID can itself be a custom domain, and that form will not authenticate
+   against IMAP. Apple issued `@mac.com`, `@me.com` and `@icloud.com` in
+   different eras and they all reach the same mailbox, so use whichever one the
+   account was given.
 3. Import [`docs/n8n-inbound-email.json`](docs/n8n-inbound-email.json), then set
    the credential, your CRM URL and an API key on the HTTP node.
 4. In the sequencer, add one HTTP node straight after the send:
