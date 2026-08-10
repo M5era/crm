@@ -788,7 +788,12 @@ export async function createApiKey(
   });
 
   if (error) return { error: error.message };
-  revalidateEverything();
+
+  // Deliberately no revalidation here. revalidateEverything() invalidates the
+  // root layout, which remounts the client tree — including the dialog that is
+  // about to display the token. The token would be destroyed before it could be
+  // read, and only a hash is stored, so it could never be shown again. The
+  // dialog refreshes on close instead, once the user is done with it.
 
   // The only time the plaintext token exists. It is not recoverable later.
   return { ok: true, secret: token };
