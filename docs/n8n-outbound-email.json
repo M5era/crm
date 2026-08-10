@@ -1,0 +1,134 @@
+{
+  "name": "CRM — outbound email (iCloud SMTP)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger",
+      "name": "Run outreach",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-620, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://crm.interlinked.dev/api/v1/contacts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameter": [
+            { "name": "Authorization", "value": "Bearer YOUR_CRM_API_KEY" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameter": [
+            { "name": "lifecycle", "value": "new" },
+            { "name": "limit", "value": "25" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-contacts",
+      "name": "Who to email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-400, 0]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "contacts",
+        "options": {}
+      },
+      "id": "split",
+      "name": "One item per contact",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [-180, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Skip anyone we must not email, whatever their lifecycle says. A bounced\n// address and an explicit opt-out both outrank a campaign.\nreturn $input.all().filter((item) => {\n  const c = item.json;\n  if (!c.email) return false;\n  if (c.bounced_at) return false;\n  if (c.unsubscribed_at) return false;\n  return true;\n});"
+      },
+      "id": "suppress",
+      "name": "Drop bounced and opted-out",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [40, 0]
+    },
+    {
+      "parameters": {
+        "fromEmail": "marc@serafines.de",
+        "toEmail": "={{ $json.email }}",
+        "subject": "=Quick question about {{ $json.company?.name || 'your setup' }}",
+        "emailFormat": "text",
+        "text": "=Hi {{ $json.first_name }},\n\nReplace this with your actual message.\n\nMarc",
+        "options": {}
+      },
+      "id": "send",
+      "name": "Send via iCloud",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [260, 0],
+      "credentials": {
+        "smtp": {
+          "id": "REPLACE_WITH_YOUR_SMTP_CREDENTIAL_ID",
+          "name": "iCloud SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pair each send result back up with the contact it went to, and pull out the\n// Message-ID. That id is the entire basis of thread-accurate reply matching:\n// without it the CRM can still match a reply by from-address, but it cannot\n// tell which campaign the reply answers, and it misses anyone who writes back\n// from a different address.\n//\n// nodemailer surfaces the id under different keys depending on the n8n\n// version, so every plausible spelling is checked before giving up.\n\nconst out = [];\n\nfor (let i = 0; i < $input.all().length; i++) {\n  const sent = $input.all()[i].json;\n  const contact = $('Drop bounced and opted-out').all()[i].json;\n\n  const messageId =\n    sent.messageId || sent.message_id || sent.messageID || null;\n\n  if (!messageId) {\n    // Loud on purpose. Silently losing threading is the failure mode that is\n    // hardest to notice later, because replies still half-work.\n    console.warn(\n      `No Message-ID returned for ${contact.email}. Reply matching for this ` +\n      `message will fall back to the from-address.`,\n    );\n  }\n\n  out.push({\n    json: {\n      message_id: messageId,\n      contact_email: contact.email,\n      subject: sent.subject || null,\n      sent_at: new Date().toISOString(),\n      _skip: !messageId,\n    },\n  });\n}\n\n// Nothing to record without an id — the CRM requires one.\nreturn out.filter((item) => !item.json._skip);"
+      },
+      "id": "extract-id",
+      "name": "Extract Message-ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://crm.interlinked.dev/api/v1/outbound-email",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameter": [
+            { "name": "Authorization", "value": "Bearer YOUR_CRM_API_KEY" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": { "response": { "neverError": true } }
+        }
+      },
+      "id": "record",
+      "name": "POST /api/v1/outbound-email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 0]
+    }
+  ],
+  "connections": {
+    "Run outreach": {
+      "main": [[{ "node": "Who to email", "type": "main", "index": 0 }]]
+    },
+    "Who to email": {
+      "main": [[{ "node": "One item per contact", "type": "main", "index": 0 }]]
+    },
+    "One item per contact": {
+      "main": [[{ "node": "Drop bounced and opted-out", "type": "main", "index": 0 }]]
+    },
+    "Drop bounced and opted-out": {
+      "main": [[{ "node": "Send via iCloud", "type": "main", "index": 0 }]]
+    },
+    "Send via iCloud": {
+      "main": [[{ "node": "Extract Message-ID", "type": "main", "index": 0 }]]
+    },
+    "Extract Message-ID": {
+      "main": [[{ "node": "POST /api/v1/outbound-email", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

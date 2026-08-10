@@ -8,6 +8,16 @@ const PUBLIC_PATHS = ["/login", "/auth"];
  * to the login page. Every CRM route is private.
  */
 export async function updateSession(request: NextRequest) {
+  // The API has no session and must not be sent to a login page: it carries a
+  // bearer token that each route verifies itself, in lib/api-auth.ts. Left to
+  // the cookie gate below, every machine call would be answered with a 307 to
+  // /login — which a caller like n8n reads as success, so the failure is
+  // silent. Returning early also skips an auth round trip these routes never
+  // needed.
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
