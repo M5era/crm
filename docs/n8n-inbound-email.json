@@ -3,6 +3,18 @@
   "nodes": [
     {
       "parameters": {
+        "content": "## Before importing\n\n1. Create an **Header Auth** credential named `CRM API key`:\n   - Name: `Authorization`\n   - Value: `Bearer <your CRM API key>`\n2. Create an **IMAP** credential for iCloud and attach it to *iCloud inbox*.\n\n## Why the POST retries\n\nThe trigger marks a message `\\Seen` as soon as it reads it, and the search is\n`[\"UNSEEN\"]` — so a message the CRM never accepted is gone from this\nworkflow's view forever. It will not be redelivered.\n\nThat makes the POST the single point where mail can be lost, so it retries\nrather than suppressing errors. `POST /api/v1/inbound-email` dedupes on\n`message_id` and returns `duplicate: true`, so a retry after a partial failure\nis safe by design.\n\nIf you would rather never lose a message than never see a duplicate, set\n*Post-process action* to **Nothing**. Mail then stays unread and is re-posted\nevery poll until you read it in a mail client — noisier, but the CRM's\nidempotency absorbs it.",
+        "height": 500,
+        "width": 440
+      },
+      "id": "note-setup",
+      "name": "Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-560, -300]
+    },
+    {
+      "parameters": {
         "postProcessAction": "read",
         "format": "resolved",
         "options": {
@@ -23,7 +35,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Flatten whatever the IMAP node hands us into the envelope the CRM expects.\n// Doing it here — rather than in the CRM — is what keeps the API transport\n// agnostic: swap IMAP for a provider webhook later and only this node changes.\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n\n  // mailparser returns addresses as { value: [{ address, name }], text }.\n  const addr = (field) => {\n    if (!field) return { email: null, name: null };\n    if (typeof field === 'string') {\n      const match = /<([^>]+)>/.exec(field);\n      return { email: (match ? match[1] : field).trim().toLowerCase(), name: null };\n    }\n    const first = Array.isArray(field.value) ? field.value[0] : null;\n    if (first) {\n      return {\n        email: (first.address || '').trim().toLowerCase() || null,\n        name: first.name || null,\n      };\n    }\n    return { email: null, name: null };\n  };\n\n  // Headers arrive as a Map, a plain object, or not at all depending on the\n  // node's format setting. Normalise to lowercase string values, because the\n  // CRM's classifier reads them by name.\n  const headers = {};\n  const raw = m.headers || m.headerLines || {};\n  const entries = raw instanceof Map ? [...raw.entries()] : Object.entries(raw);\n  for (const [key, value] of entries) {\n    if (value == null) continue;\n    headers[String(key).toLowerCase()] = Array.isArray(value)\n      ? value.join(' ')\n      : typeof value === 'object'\n        ? JSON.stringify(value)\n        : String(value);\n  }\n\n  const from = addr(m.from);\n  const to = addr(m.to);\n\n  out.push({\n    json: {\n      message_id: m.messageId || headers['message-id'] || null,\n      in_reply_to: m.inReplyTo || headers['in-reply-to'] || null,\n      references: m.references || headers['references'] || [],\n      from_email: from.email,\n      from_name: from.name,\n      to_email: to.email,\n      subject: m.subject || null,\n      text: m.textPlain || m.text || m.textHtml || null,\n      headers,\n      received_at: m.date || new Date().toISOString(),\n    },\n  });\n}\n\nreturn out;"
+        "jsCode": "// Flatten whatever the IMAP node hands us into the envelope the CRM expects.\n// Doing it here — rather than in the CRM — is what keeps the API transport\n// agnostic: swap IMAP for a provider webhook later and only this node changes.\n\n// DKIM signatures, ARC chains and Received trails run to kilobytes each and\n// are stored verbatim in a jsonb column. The classifier reads short operational\n// headers (auto-submitted, precedence, list-unsubscribe and friends), so cap\n// the value length rather than warehousing mail-server plumbing per message.\nconst MAX_HEADER_VALUE = 1000;\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n\n  // mailparser returns addresses as { value: [{ address, name }], text }.\n  const addr = (field) => {\n    if (!field) return { email: null, name: null };\n    if (typeof field === 'string') {\n      const match = /<([^>]+)>/.exec(field);\n      return { email: (match ? match[1] : field).trim().toLowerCase(), name: null };\n    }\n    const first = Array.isArray(field.value) ? field.value[0] : null;\n    if (first) {\n      return {\n        email: (first.address || '').trim().toLowerCase() || null,\n        name: first.name || null,\n      };\n    }\n    return { email: null, name: null };\n  };\n\n  // Headers arrive as a Map, a plain object, or not at all depending on the\n  // node's format setting. Normalise to lowercase string values, because the\n  // CRM's classifier reads them by name.\n  const headers = {};\n  const raw = m.headers || m.headerLines || {};\n  const entries = raw instanceof Map ? [...raw.entries()] : Object.entries(raw);\n  for (const [key, value] of entries) {\n    if (value == null) continue;\n    const flat = Array.isArray(value)\n      ? value.join(' ')\n      : typeof value === 'object'\n        ? JSON.stringify(value)\n        : String(value);\n    headers[String(key).toLowerCase()] = flat.slice(0, MAX_HEADER_VALUE);\n  }\n\n  const from = addr(m.from);\n  const to = addr(m.to);\n\n  // With format: \"resolved\" the parsed message exposes text / html /\n  // textAsHtml. There is no textPlain or textHtml on it — reading those first\n  // meant the real body was only ever found by the fallback, and an\n  // HTML-only message came through with no body at all.\n  const body = m.text || m.textAsHtml || m.html || null;\n\n  out.push({\n    json: {\n      message_id: m.messageId || headers['message-id'] || null,\n      in_reply_to: m.inReplyTo || headers['in-reply-to'] || null,\n      references: m.references || headers['references'] || [],\n      from_email: from.email,\n      from_name: from.name,\n      to_email: to.email,\n      subject: m.subject || null,\n      text: body,\n      headers,\n      received_at: m.date || new Date().toISOString(),\n    },\n  });\n}\n\nreturn out;"
       },
       "id": "normalize",
       "name": "Normalise envelope",
@@ -34,32 +46,28 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://YOUR-CRM-DOMAIN/api/v1/inbound-email",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameter": [
-            {
-              "name": "Authorization",
-              "value": "Bearer YOUR_CRM_API_KEY"
-            }
-          ]
-        },
+        "url": "https://crm.interlinked.dev/api/v1/inbound-email",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
-        }
+        "options": {}
       },
       "id": "post-to-crm",
       "name": "POST /api/v1/inbound-email",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [200, 0]
+      "position": [200, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CRM_API_CREDENTIAL_ID",
+          "name": "CRM API key"
+        }
+      }
     }
   ],
   "connections": {
