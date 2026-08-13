@@ -7,6 +7,7 @@ import {
 import { requireWorkspace } from "@/lib/workspace";
 import { ImportDialog, NewContactDialog } from "@/components/dialogs";
 import { LifecycleBadge } from "@/components/lifecycle";
+import { VerificationDot } from "@/components/verification";
 import { LIFECYCLES } from "@/lib/types";
 import { SearchInput } from "@/components/search-input";
 import { Avatar, EmptyState, PageHeader } from "@/components/ui";
@@ -197,13 +198,19 @@ export default async function ContactsPage({
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-1 text-xs">
                             {contact.email && (
-                              <a
-                                href={`mailto:${contact.email}`}
-                                className="flex items-center gap-1.5 text-ink-muted hover:text-brand-soft"
-                              >
-                                <MailIcon className="h-3.5 w-3.5" />
-                                {contact.email}
-                              </a>
+                              <span className="flex items-center gap-1.5">
+                                <a
+                                  href={`mailto:${contact.email}`}
+                                  className="flex items-center gap-1.5 text-ink-muted hover:text-brand-soft"
+                                >
+                                  <MailIcon className="h-3.5 w-3.5" />
+                                  {contact.email}
+                                </a>
+                                <VerificationDot
+                                  value={contact.verification}
+                                  note={contact.verification_note}
+                                />
+                              </span>
                             )}
                             {contact.phone && (
                               <a

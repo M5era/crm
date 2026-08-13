@@ -51,7 +51,11 @@ export async function POST(request: Request) {
   return Response.json(result, { status: result.failed > 0 ? 207 : 200 });
 }
 
-/** GET /api/v1/contacts?limit=&lifecycle= — read the workspace's people back. */
+/**
+ * GET /api/v1/contacts?limit=&lifecycle=&verification= — read the workspace's
+ * people back. `verification` takes a comma list so a sequencer can ask for
+ * every mailable verdict at once: ?verification=ok,role.
+ */
 export async function GET(request: Request) {
   const auth = await authenticateRequest(request);
   if (!auth.ok) return jsonError(auth.status, auth.error);
@@ -59,6 +63,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const limit = Math.min(Number(url.searchParams.get("limit") ?? 100), 1000);
   const lifecycle = url.searchParams.get("lifecycle");
+  const verification = url.searchParams.get("verification");
 
   let query = auth.supabase
     .from("contacts")
@@ -68,6 +73,12 @@ export async function GET(request: Request) {
     .limit(limit);
 
   if (lifecycle) query = query.eq("lifecycle", lifecycle);
+  if (verification) {
+    query = query.in(
+      "verification",
+      verification.split(",").map((v) => v.trim()).filter(Boolean),
+    );
+  }
 
   const { data, error } = await query;
   if (error) return jsonError(500, error.message);

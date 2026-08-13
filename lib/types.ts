@@ -48,6 +48,22 @@ export type Lifecycle =
   | "unqualified"
   | "customer";
 
+/**
+ * Verdict on an email address, written by the external verification workflow
+ * (n8n: syntax → MX → Verifalia) — never by this app. NULL and "unknown" both
+ * mean unchecked: the workflow re-queues them on its next run.
+ */
+export type Verification =
+  | "ok"
+  | "role"
+  | "risky"
+  | "unknown"
+  | "no_reply"
+  | "disposable"
+  | "no_mx"
+  | "invalid_syntax"
+  | "undeliverable";
+
 export type Contact = {
   id: string;
   workspace_id: string;
@@ -56,6 +72,9 @@ export type Contact = {
   last_reply_at: string | null;
   bounced_at: string | null;
   unsubscribed_at: string | null;
+  verification: Verification | null;
+  verification_note: string | null;
+  verified_at: string | null;
   first_name: string;
   last_name: string | null;
   email: string | null;
@@ -352,4 +371,93 @@ export const LIFECYCLES: Array<{
 
 export function lifecycleMeta(value: string) {
   return LIFECYCLES.find((l) => l.value === value) ?? LIFECYCLES[0];
+}
+
+/**
+ * How each verification verdict reads in the UI. `mailable` is the one bit
+ * the rest of the app cares about: whether a sequencer should spend a send
+ * on this address.
+ */
+export const VERIFICATIONS: Array<{
+  value: Verification;
+  label: string;
+  description: string;
+  color: string;
+  mailable: boolean;
+}> = [
+  {
+    value: "ok",
+    label: "Deliverable",
+    description: "Mailbox confirmed — safe to send.",
+    color: "#199e70",
+    mailable: true,
+  },
+  {
+    value: "role",
+    label: "Role address",
+    description: "Deliverable, but a shared mailbox (info@, kontakt@) — a person may never see it.",
+    color: "#2a78d6",
+    mailable: true,
+  },
+  {
+    value: "risky",
+    label: "Risky",
+    description: "Deliverable on paper, dubious in practice — catch-all domain or full mailbox.",
+    color: "#b0812a",
+    mailable: false,
+  },
+  {
+    value: "unknown",
+    label: "Unverified",
+    description: "Checks ran but could not decide. Will be retried automatically.",
+    color: "#6b7285",
+    mailable: false,
+  },
+  {
+    value: "no_reply",
+    label: "No-reply",
+    description: "An unmonitored sender address — a reply would go nowhere.",
+    color: "#b0812a",
+    mailable: false,
+  },
+  {
+    value: "disposable",
+    label: "Disposable",
+    description: "Throwaway domain. Not a real relationship.",
+    color: "#d4562f",
+    mailable: false,
+  },
+  {
+    value: "no_mx",
+    label: "No mail server",
+    description: "The domain cannot receive mail at all.",
+    color: "#d4562f",
+    mailable: false,
+  },
+  {
+    value: "invalid_syntax",
+    label: "Invalid",
+    description: "Not a parseable email address.",
+    color: "#d4562f",
+    mailable: false,
+  },
+  {
+    value: "undeliverable",
+    label: "Undeliverable",
+    description: "Mailbox confirmed dead.",
+    color: "#d4562f",
+    mailable: false,
+  },
+];
+
+export function verificationMeta(value: string) {
+  return (
+    VERIFICATIONS.find((v) => v.value === value) ?? {
+      value: "unknown" as Verification,
+      label: "Unverified",
+      description: "Not checked yet.",
+      color: "#6b7285",
+      mailable: false,
+    }
+  );
 }

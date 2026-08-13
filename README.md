@@ -119,6 +119,28 @@ IMAP will redeliver whenever a poll is interrupted mid-batch. Messages with no
 `Message-ID` get a stable synthetic one derived from the envelope, so a real
 reply is never dropped on a technicality.
 
+### Email verification
+
+Reply detection tells you an address died *after* a send; verification decides
+whether an address deserves a send at all. The same split as above applies:
+**an n8n workflow owns the checking, the CRM owns the record.** A scheduled
+workflow picks up every contact whose `verification` is `NULL` or `unknown`,
+runs free local checks first (syntax, no-reply locals, disposable domains, MX
+via DNS-over-HTTPS) and only spends a Verifalia credit on addresses that
+survive them. The verdict is written back to three columns on `contacts`:
+
+| Column | Meaning |
+|---|---|
+| `verification` | One of `ok`, `role`, `risky`, `unknown`, `no_reply`, `disposable`, `no_mx`, `invalid_syntax`, `undeliverable` |
+| `verification_note` | Why — which check decided, e.g. `no MX records for …` |
+| `verified_at` | When the verdict was written |
+
+`NULL` and `unknown` both mean "not decided" and are re-queued on the next
+run; every other verdict is final until something resets it. The UI shows the
+verdict as a dot next to the address on the Contacts list and as an
+**Email check** row on the profile. A sequencer should only pull addresses
+worth mailing: `GET /api/v1/contacts?verification=ok,role`.
+
 ### Setting up the iCloud side
 
 iCloud+ works fine for this. It has no push API, so n8n polls — a few minutes of
@@ -282,6 +304,7 @@ POST /api/v1/deals           { "title": "...", "contact_email": "..." }
 POST /api/v1/outbound-email  { "message_id": "...", "contact_email": "..." }
 POST /api/v1/inbound-email   { "message_id": "...", "from_email": "...", ... }
 GET  /api/v1/contacts?lifecycle=replied&limit=100
+GET  /api/v1/contacts?verification=ok,role
 GET  /api/v1/deals?status=open
 GET  /api/v1/inbound-email?unmatched=true
 
