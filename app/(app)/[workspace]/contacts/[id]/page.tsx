@@ -21,6 +21,7 @@ import { LifecycleSelect } from "@/components/lifecycle";
 import { LeadList } from "@/components/lead-list";
 import { LinkIcon, MailIcon, PhoneIcon, TrashIcon } from "@/components/icons";
 import { Avatar, DetailRow, PageHeader, Section, StatCard } from "@/components/ui";
+import { VerificationBadge } from "@/components/verification";
 import { formatDate, money } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -273,6 +274,25 @@ export default async function ContactPage({
                   "—"
                 )}
               </DetailRow>
+              {/* Written by the external verification workflow, read-only
+                  here. No row at all until the address has been checked. */}
+              {contact.verification && (
+                <DetailRow label="Email check">
+                  <div className="space-y-1">
+                    <VerificationBadge value={contact.verification} />
+                    {contact.verification_note && (
+                      <p className="text-xs text-ink-faint">
+                        {contact.verification_note}
+                      </p>
+                    )}
+                    {contact.verified_at && (
+                      <p className="text-xs text-ink-faint">
+                        Checked {formatDate(contact.verified_at)}
+                      </p>
+                    )}
+                  </div>
+                </DetailRow>
+              )}
               <DetailRow label="Phone">{contact.phone ?? "—"}</DetailRow>
               <DetailRow label="Company">
                 {contact.company ? (

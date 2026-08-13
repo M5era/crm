@@ -225,6 +225,7 @@ export default async function SettingsPage({
 POST /api/v1/companies   { "companies": [ ... ] }
 POST /api/v1/deals       { "title": "...", "contact_email": "..." }
 GET  /api/v1/contacts?lifecycle=replied&limit=100
+GET  /api/v1/contacts?verification=ok,role
 GET  /api/v1/deals?status=open
 
 Authorization: Bearer crm_live_…`}
